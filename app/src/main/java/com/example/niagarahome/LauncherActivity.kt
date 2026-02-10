@@ -64,6 +64,7 @@ class LauncherActivity : AppCompatActivity() {
     private var searchQuery = ""
     private var fullItems: List<ListItem> = emptyList()
     private var updatingInput = false
+    private var stripFilterActive = false
 
     // Mutable settings-driven values
     private var pullDownStartY = 0f
@@ -127,17 +128,16 @@ class LauncherActivity : AppCompatActivity() {
         searchButton.visibility = View.GONE // hidden until app list is shown
 
         alphabetStrip = findViewById(R.id.alphabet_strip)
-        alphabetStrip.onLetterSelected = { position ->
+        alphabetStrip.onLetterSelected = { letter ->
             if (!appListVisible) showAppList()
-            smoothScrollTo(position)
+            filterByLetter(letter)
         }
         alphabetStrip.onFineScroll = { fraction ->
             if (!appListVisible) showAppList()
-            val totalItems = adapter.itemCount
-            if (totalItems > 0) {
-                val target = (fraction * totalItems).toInt().coerceIn(0, totalItems - 1)
-                smoothScrollTo(target)
+            if (stripFilterActive) {
+                endStripFilter()
             }
+            scrollToFraction(fraction)
         }
         alphabetStrip.onLetterPreview = { letter, y ->
             if (letter != null) {
@@ -153,6 +153,9 @@ class LauncherActivity : AppCompatActivity() {
                 letterPopup.animate().alpha(0f).setDuration(150).withEndAction {
                     letterPopup.visibility = View.GONE
                 }.start()
+                if (stripFilterActive) {
+                    endStripFilter()
+                }
             }
         }
 
@@ -469,6 +472,16 @@ class LauncherActivity : AppCompatActivity() {
         }
     }
 
+    private fun scrollToFraction(fraction: Float) {
+        val totalHeight = recyclerView.computeVerticalScrollRange()
+        val viewHeight = recyclerView.computeVerticalScrollExtent()
+        val maxScroll = totalHeight - viewHeight
+        if (maxScroll <= 0) return
+        val targetScroll = (fraction * maxScroll).toInt()
+        val currentScroll = recyclerView.computeVerticalScrollOffset()
+        recyclerView.scrollBy(0, targetScroll - currentScroll)
+    }
+
     // Intercept ALL touches for pull-down and outside-tap detection
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
         if (handlePullDown(event)) return true
@@ -624,6 +637,25 @@ class LauncherActivity : AppCompatActivity() {
             startActivity(Intent(Intent.ACTION_VIEW,
                 Uri.parse("https://play.google.com/store/search?q=$query")))
         }
+    }
+
+    private fun filterByLetter(letter: Char) {
+        if (searchQuery.isNotEmpty()) return
+        stripFilterActive = true
+        val filtered = fullItems.filter { item ->
+            when (item) {
+                is ListItem.HeaderItem -> item.letter == letter
+                is ListItem.AppItem -> item.appInfo.sortLetter == letter
+                else -> false
+            }
+        }
+        adapter.submitList(filtered)
+        recyclerView.scrollToPosition(0)
+    }
+
+    private fun endStripFilter() {
+        stripFilterActive = false
+        submitItemsWithPositions(fullItems)
     }
 
     private fun buildItemList(apps: List<AppInfo>): List<ListItem> {

@@ -16,7 +16,7 @@ class AlphabetStripView @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : View(context, attrs, defStyleAttr) {
 
-    var onLetterSelected: ((Int) -> Unit)? = null
+    var onLetterSelected: ((Char) -> Unit)? = null
     var onLetterPreview: ((Char?, Float) -> Unit)? = null
     var onFineScroll: ((Float) -> Unit)? = null  // 0.0 = top, 1.0 = bottom
 
@@ -77,6 +77,7 @@ class AlphabetStripView @JvmOverloads constructor(
         val centerX = margin + (width - margin) / 2f
         val totalHeight = height - paddingTop - paddingBottom
         val letterHeight = totalHeight.toFloat() / letters.size
+        val fontSize = baseFontSize.coerceAtMost(letterHeight * 0.85f)
 
         for ((i, letter) in letters.withIndex()) {
             val y = paddingTop + letterHeight * i + letterHeight / 2f
@@ -96,11 +97,11 @@ class AlphabetStripView @JvmOverloads constructor(
 
             val drawX = centerX + offsetX
             if (i == selectedIndex && isDragging) {
-                highlightPaint.textSize = baseFontSize * scale.coerceAtLeast(highlightScale)
+                highlightPaint.textSize = fontSize * scale.coerceAtLeast(highlightScale)
                 val metrics = highlightPaint.fontMetrics
                 canvas.drawText(letter.toString(), drawX, y - (metrics.ascent + metrics.descent) / 2f, highlightPaint)
             } else {
-                paint.textSize = baseFontSize * scale
+                paint.textSize = fontSize * scale
                 val metrics = paint.fontMetrics
                 canvas.drawText(letter.toString(), drawX, y - (metrics.ascent + metrics.descent) / 2f, paint)
             }
@@ -176,10 +177,7 @@ class AlphabetStripView @JvmOverloads constructor(
             if (index != selectedIndex) {
                 selectedIndex = index
                 val letter = letters[index]
-                val position = letterPositions[letter]
-                if (position != null) {
-                    onLetterSelected?.invoke(position)
-                }
+                onLetterSelected?.invoke(letter)
                 performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                 val letterY = paddingTop + letterHeight * index + letterHeight / 2f
                 onLetterPreview?.invoke(letter, letterY)

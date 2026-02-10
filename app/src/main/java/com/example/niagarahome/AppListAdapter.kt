@@ -139,6 +139,14 @@ class AppListAdapter(
         }
     }
 
+    override fun onViewRecycled(holder: RecyclerView.ViewHolder) {
+        holder.itemView.animate().cancel()
+        holder.itemView.alpha = 1f
+        holder.itemView.translationY = 0f
+        holder.itemView.scaleX = 1f
+        holder.itemView.scaleY = 1f
+    }
+
     fun resetAnimations() {
         lastAnimatedPosition = -1
     }
