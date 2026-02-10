@@ -1,6 +1,9 @@
 package com.example.niagarahome
 
 import android.annotation.SuppressLint
+import android.app.Activity
+import android.util.Log
+import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Intent
 import android.content.res.Configuration
@@ -16,6 +19,7 @@ import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.PopupMenu
 import androidx.core.content.pm.ShortcutInfoCompat
@@ -24,7 +28,6 @@ import androidx.core.graphics.drawable.IconCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.LinearSmoothScroller
 import androidx.recyclerview.widget.RecyclerView
 import kotlinx.coroutines.launch
 
@@ -42,6 +45,21 @@ class LauncherActivity : AppCompatActivity() {
     private lateinit var searchButton: View
     private lateinit var rootLayout: FrameLayout
 
+    // Widget hosting
+    private lateinit var widgetPage: WidgetPageView
+    private lateinit var appPage: FrameLayout
+    private lateinit var widgetRepository: WidgetRepository
+
+    // App list visibility
+    private var appListVisible = false
+    private var freshCreate = false
+
+    companion object {
+        private const val RC_PICK_WIDGET = 1001
+        private const val RC_BIND_WIDGET = 1002
+        private const val RC_CONFIGURE_WIDGET = 1003
+    }
+
     // Search state
     private var searchQuery = ""
     private var fullItems: List<ListItem> = emptyList()
@@ -58,6 +76,7 @@ class LauncherActivity : AppCompatActivity() {
         setContentView(R.layout.activity_launcher)
 
         repository = AppRepository(this)
+        widgetRepository = WidgetRepository(applicationContext)
 
         adapter = AppListAdapter(
             onClick = { app -> launchApp(app) },
@@ -73,6 +92,20 @@ class LauncherActivity : AppCompatActivity() {
 
         letterPopup = findViewById(R.id.letter_popup)
         searchIndicator = findViewById(R.id.search_indicator)
+
+        // Widget page + app page
+        widgetPage = findViewById(R.id.widget_page)
+        appPage = findViewById(R.id.app_page)
+
+        // Start with app page off-screen right (use visibility until we know the width)
+        appPage.visibility = View.INVISIBLE
+        appPage.post {
+            appPage.translationX = appPage.width.toFloat()
+            appPage.visibility = View.VISIBLE
+        }
+
+        widgetPage.onAddWidgetClick = { startWidgetPicker() }
+        widgetPage.onWidgetLongPress = { widgetId -> confirmRemoveWidget(widgetId) }
 
         hiddenInput = findViewById(R.id.hidden_input)
         hiddenInput.addTextChangedListener(object : TextWatcher {
@@ -91,12 +124,15 @@ class LauncherActivity : AppCompatActivity() {
 
         searchButton = findViewById(R.id.search_button)
         searchButton.setOnClickListener { showKeyboard() }
+        searchButton.visibility = View.GONE // hidden until app list is shown
 
         alphabetStrip = findViewById(R.id.alphabet_strip)
         alphabetStrip.onLetterSelected = { position ->
+            if (!appListVisible) showAppList()
             smoothScrollTo(position)
         }
         alphabetStrip.onFineScroll = { fraction ->
+            if (!appListVisible) showAppList()
             val totalItems = adapter.itemCount
             if (totalItems > 0) {
                 val target = (fraction * totalItems).toInt().coerceIn(0, totalItems - 1)
@@ -129,8 +165,6 @@ class LauncherActivity : AppCompatActivity() {
             }
         }
 
-        // Settings entry is via double-tap back button (see onBackPressed)
-
         foldableHelper = FoldableHelper(this)
         foldableHelper.observe(lifecycle, lifecycleScope)
 
@@ -143,22 +177,232 @@ class LauncherActivity : AppCompatActivity() {
                 }
             }
         }
+
+        freshCreate = true
     }
 
     override fun onStart() {
         super.onStart()
         repository.register()
+        widgetRepository.startListening()
         applySettings(resetAnimations = !settingsApplied)
         settingsApplied = true
         clearSearch()
+        hideAppList(animate = false)
+        if (freshCreate) {
+            freshCreate = false
+            cleanupPendingWidget()
+        }
+        restoreSavedWidgets()
         recyclerView.requestFocus()
         recyclerView.scrollToPosition(0)
     }
 
+    override fun onStop() {
+        super.onStop()
+        repository.unregister()
+        widgetRepository.stopListening()
+    }
+
+    // --- App list slide animation ---
+
+    private fun showAppList() {
+        if (appListVisible) return
+        appListVisible = true
+        searchButton.visibility = View.VISIBLE
+        appPage.animate()
+            .translationX(0f)
+            .setDuration(200)
+            .start()
+    }
+
+    private fun hideAppList(animate: Boolean = true) {
+        if (!animate) {
+            appListVisible = false
+            // Use screen width as fallback when appPage hasn't been laid out yet
+            val offScreen = if (appPage.width > 0) appPage.width.toFloat()
+                else resources.displayMetrics.widthPixels.toFloat()
+            appPage.translationX = offScreen
+            searchButton.visibility = View.GONE
+            clearSearch()
+            return
+        }
+        if (!appListVisible) return
+        appListVisible = false
+        searchButton.visibility = View.GONE
+        clearSearch()
+        appPage.animate()
+            .translationX(appPage.width.toFloat())
+            .setDuration(200)
+            .start()
+    }
+
+    // --- Widget hosting ---
+
+    @Suppress("DEPRECATION")
+    private fun startWidgetPicker() {
+        val id = widgetRepository.allocateWidgetId()
+        widgetRepository.pendingWidgetId = id
+        Log.d("NHWidget", "startWidgetPicker pendingId=$id")
+        val pickIntent = Intent(AppWidgetManager.ACTION_APPWIDGET_PICK).apply {
+            putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+        }
+        startActivityForResult(pickIntent, RC_PICK_WIDGET)
+    }
+
+    @Suppress("DEPRECATION")
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        val pending = widgetRepository.pendingWidgetId
+        Log.d("NHWidget", "onActivityResult req=$requestCode result=$resultCode pendingId=$pending")
+        when (requestCode) {
+            RC_PICK_WIDGET -> handleWidgetPickerResult(resultCode, data)
+            RC_BIND_WIDGET -> handleWidgetBindResult(resultCode)
+            RC_CONFIGURE_WIDGET -> handleWidgetConfigureResult(resultCode)
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun handleWidgetPickerResult(resultCode: Int, data: Intent?) {
+        val pending = widgetRepository.pendingWidgetId
+        if (pending == -1) return
+        if (resultCode != Activity.RESULT_OK || data == null) {
+            widgetRepository.appWidgetHost.deleteAppWidgetId(pending)
+            widgetRepository.pendingWidgetId = -1
+            return
+        }
+        val widgetId = data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, pending)
+        widgetRepository.pendingWidgetId = widgetId
+
+        val info = widgetRepository.getProviderInfo(widgetId)
+        Log.d("NHWidget", "Picked widget $widgetId provider=${info?.provider}")
+        if (info == null) {
+            widgetRepository.appWidgetHost.deleteAppWidgetId(widgetId)
+            widgetRepository.pendingWidgetId = -1
+            return
+        }
+
+        // Picker already bound the widget — proceed directly
+        proceedAfterBind(widgetId, info)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun handleWidgetBindResult(resultCode: Int) {
+        val pending = widgetRepository.pendingWidgetId
+        Log.d("NHWidget", "Bind result=$resultCode pendingId=$pending")
+        if (pending == -1) return
+        if (resultCode != Activity.RESULT_OK) {
+            widgetRepository.appWidgetHost.deleteAppWidgetId(pending)
+            widgetRepository.pendingWidgetId = -1
+            return
+        }
+        val info = widgetRepository.getProviderInfo(pending)
+        if (info == null) {
+            widgetRepository.appWidgetHost.deleteAppWidgetId(pending)
+            widgetRepository.pendingWidgetId = -1
+            return
+        }
+        proceedAfterBind(pending, info)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun proceedAfterBind(widgetId: Int, info: android.appwidget.AppWidgetProviderInfo) {
+        if (info.configure != null) {
+            Log.d("NHWidget", "Launching configure: ${info.configure}")
+            val configIntent = Intent(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE).apply {
+                component = info.configure
+                putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
+            }
+            startActivityForResult(configIntent, RC_CONFIGURE_WIDGET)
+        } else {
+            finishAddWidget(widgetId)
+        }
+    }
+
+    private fun handleWidgetConfigureResult(resultCode: Int) {
+        val pending = widgetRepository.pendingWidgetId
+        Log.d("NHWidget", "Configure result=$resultCode pendingId=$pending")
+        if (pending == -1) return
+        if (resultCode != Activity.RESULT_OK) {
+            widgetRepository.appWidgetHost.deleteAppWidgetId(pending)
+            widgetRepository.pendingWidgetId = -1
+            return
+        }
+        finishAddWidget(pending)
+    }
+
+    /** Clean up any orphaned pending widget ID from a previous process death. */
+    private fun cleanupPendingWidget() {
+        val pending = widgetRepository.pendingWidgetId
+        if (pending == -1) return
+        Log.d("NHWidget", "Cleaning up orphaned pending widget $pending")
+        widgetRepository.appWidgetHost.deleteAppWidgetId(pending)
+        widgetRepository.pendingWidgetId = -1
+    }
+
+    private fun finishAddWidget(widgetId: Int) {
+        Log.d("NHWidget", "finishAddWidget($widgetId)")
+        widgetRepository.addWidgetId(widgetId)
+        val info = widgetRepository.getProviderInfo(widgetId) ?: return
+        val hostView = widgetRepository.createView(widgetId)
+        setupWidgetView(hostView, info)
+        val density = resources.displayMetrics.density
+        val heightPx = if (info.minHeight > 0) {
+            (info.minHeight * density).toInt()
+        } else {
+            (200 * density).toInt()
+        }
+        widgetPage.addWidgetView(hostView, widgetId, heightPx)
+        widgetRepository.pendingWidgetId = -1
+    }
+
+    private fun setupWidgetView(hostView: android.appwidget.AppWidgetHostView, info: android.appwidget.AppWidgetProviderInfo) {
+        val density = resources.displayMetrics.density
+        // Calculate width in dp (full screen minus padding)
+        val widthDp = ((resources.displayMetrics.widthPixels - (32 * density).toInt()) / density).toInt()
+        val heightDp = if (info.minHeight > 0) info.minHeight else 200
+        hostView.updateAppWidgetSize(null, widthDp, heightDp, widthDp, heightDp)
+    }
+
+    private fun restoreSavedWidgets() {
+        val ids = widgetRepository.getSavedWidgetIds()
+        Log.d("NHWidget", "Restoring ${ids.size} widgets: $ids")
+        widgetPage.clearWidgets()
+        val density = resources.displayMetrics.density
+        for (id in ids) {
+            val info = widgetRepository.getProviderInfo(id)
+            if (info != null) {
+                val hostView = widgetRepository.createView(id)
+                setupWidgetView(hostView, info)
+                val heightPx = if (info.minHeight > 0) {
+                    (info.minHeight * density).toInt()
+                } else {
+                    (200 * density).toInt()
+                }
+                widgetPage.addWidgetView(hostView, id, heightPx)
+            } else {
+                widgetRepository.removeWidgetId(id)
+            }
+        }
+    }
+
+    private fun confirmRemoveWidget(widgetId: Int) {
+        AlertDialog.Builder(this)
+            .setMessage("Remove this widget?")
+            .setPositiveButton("Remove") { _, _ ->
+                widgetPage.removeWidgetView(widgetId)
+                widgetRepository.removeWidgetId(widgetId)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    // --- Settings ---
+
     private fun applySettings(resetAnimations: Boolean = false) {
         val density = resources.displayMetrics.density
 
-        // Alphabet strip margin + width (wider by touch margin for forgiving hits)
         val stripMargin = (Settings.stripEndMarginDp * density).toInt()
         val touchMarginPx = (Settings.pillTouchMarginDp * density).toInt()
         val visualWidth = (Settings.alphabetStripWidthDp * density).toInt()
@@ -172,7 +416,6 @@ class LauncherActivity : AppCompatActivity() {
         val stripPad = (Settings.stripVerticalPaddingDp * density).toInt()
         alphabetStrip.setPadding(0, stripPad, 0, stripPad)
 
-        // RecyclerView padding (based on visual strip width, not touch area)
         recyclerView.setPadding(
             0,
             (Settings.listTopPaddingDp * density).toInt(),
@@ -180,13 +423,11 @@ class LauncherActivity : AppCompatActivity() {
             (Settings.listBottomPaddingDp * density).toInt()
         )
 
-        // Alphabet strip visual properties
         alphabetStrip.highlightScale = Settings.highlightScale
         alphabetStrip.fineThresholdPx = Settings.fineScrollThresholdDp * density
         alphabetStrip.bulgeMarginPx = Settings.bulgeMarginDp * density
         alphabetStrip.bulgeRadius = Settings.bulgeRadius.toFloat()
 
-        // Adapter properties
         adapter.pressScale = Settings.pressScale
         adapter.enterAnimSlidePx = Settings.enterAnimSlideDp * density
         adapter.enterAnimDurationMs = Settings.enterAnimDurationMs.toLong()
@@ -197,14 +438,11 @@ class LauncherActivity : AppCompatActivity() {
             adapter.resetAnimations()
         }
 
-        // Pull-down threshold
         pullDownThresholdPx = Settings.pullDownThresholdDp * density
 
-        // Letter popup margin (position relative to strip)
         val popupMargin = (Settings.alphabetStripWidthDp * density).toInt() + (16 * density).toInt()
         (letterPopup.layoutParams as FrameLayout.LayoutParams).marginEnd = popupMargin
 
-        // Force rebind visible items to pick up new padding/scale
         adapter.notifyDataSetChanged()
     }
 
@@ -231,24 +469,37 @@ class LauncherActivity : AppCompatActivity() {
         }
     }
 
-    // Intercept ALL touches for pull-down detection (fixes the bug where
-    // setOnTouchListener on root never fires because RecyclerView consumes events)
+    // Intercept ALL touches for pull-down and outside-tap detection
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
         if (handlePullDown(event)) return true
+        // Tap outside app list dismisses it
+        if (event.action == MotionEvent.ACTION_DOWN && appListVisible) {
+            val x = event.rawX
+            val loc = IntArray(2)
+            appPage.getLocationOnScreen(loc)
+            val appPageLeft = loc[0] + appPage.translationX
+            // Also check the strip — don't dismiss if touching the strip
+            alphabetStrip.getLocationOnScreen(loc)
+            val stripLeft = loc[0].toFloat()
+            if (x < appPageLeft && x < stripLeft) {
+                hideAppList()
+                return true
+            }
+        }
         return super.dispatchTouchEvent(event)
     }
 
     @SuppressLint("WrongConstant")
     private fun handlePullDown(event: MotionEvent): Boolean {
+        // Only handle pull-down on widget page (when app list is hidden)
+        if (appListVisible) return false
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
-                if (!recyclerView.canScrollVertically(-1)) {
-                    pullDownStartY = event.rawY
-                    pullDownTracking = true
-                }
+                pullDownStartY = event.rawY
+                pullDownTracking = true
             }
             MotionEvent.ACTION_MOVE -> {
-                if (pullDownTracking && !recyclerView.canScrollVertically(-1)) {
+                if (pullDownTracking) {
                     val deltaY = event.rawY - pullDownStartY
                     if (deltaY > pullDownThresholdPx) {
                         pullDownTracking = false
@@ -266,18 +517,11 @@ class LauncherActivity : AppCompatActivity() {
 
     @SuppressLint("WrongConstant")
     private fun expandNotificationShade() {
-        recyclerView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+        rootLayout.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
         try {
             val sbm = getSystemService("statusbar")
             sbm?.javaClass?.getMethod("expandNotificationsPanel")?.invoke(sbm)
-        } catch (_: Exception) {
-            // Silently fail if method unavailable
-        }
-    }
-
-    override fun onStop() {
-        super.onStop()
-        repository.unregister()
+        } catch (_: Exception) {}
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -287,7 +531,11 @@ class LauncherActivity : AppCompatActivity() {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        startActivity(Intent(this, SettingsActivity::class.java))
+        if (appListVisible) {
+            hideAppList()
+        } else {
+            startActivity(Intent(this, SettingsActivity::class.java))
+        }
     }
 
     private fun launchFirstMatch() {
@@ -297,6 +545,7 @@ class LauncherActivity : AppCompatActivity() {
 
     private fun launchApp(app: AppInfo) {
         clearSearch()
+        hideAppList()
         val intent = Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_LAUNCHER)
             component = ComponentName(app.packageName, app.activityName)
@@ -309,7 +558,7 @@ class LauncherActivity : AppCompatActivity() {
         if (searchQuery.isEmpty()) {
             searchIndicator.visibility = View.GONE
             alphabetStrip.visibility = View.VISIBLE
-            searchButton.visibility = View.VISIBLE
+            searchButton.visibility = if (appListVisible) View.VISIBLE else View.GONE
             submitItemsWithPositions(fullItems)
             recyclerView.scrollToPosition(0)
         } else {
@@ -329,7 +578,7 @@ class LauncherActivity : AppCompatActivity() {
             updatingInput = false
             searchIndicator.visibility = View.GONE
             alphabetStrip.visibility = View.VISIBLE
-            searchButton.visibility = View.VISIBLE
+            searchButton.visibility = if (appListVisible) View.VISIBLE else View.GONE
             submitItemsWithPositions(fullItems)
         }
         hideKeyboard()
@@ -368,6 +617,7 @@ class LauncherActivity : AppCompatActivity() {
 
     private fun searchPlayStore(query: String) {
         clearSearch()
+        hideAppList()
         try {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://search?q=$query")))
         } catch (_: Exception) {

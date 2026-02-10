@@ -8,16 +8,84 @@
     android:clipToPadding="false"
     android:fitsSystemWindows="true">
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/app_list"
+    <!-- Widget page: always visible behind app list -->
+    <com.example.niagarahome.WidgetPageView
+        android:id="@+id/widget_page"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- App list page: slides in from right -->
+    <FrameLayout
+        android:id="@+id/app_page"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:clipToPadding="false"
-        android:paddingTop="8dp"
-        android:paddingEnd="@dimen/alphabet_strip_width"
-        android:paddingBottom="48dp"
-        android:scrollbars="none" />
+        android:background="@android:color/black"
+        android:clipChildren="false"
+        android:clipToPadding="false">
 
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/app_list"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:paddingTop="8dp"
+            android:paddingEnd="@dimen/alphabet_strip_width"
+            android:paddingBottom="48dp"
+            android:scrollbars="none" />
+
+        <TextView
+            android:id="@+id/letter_popup"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_gravity="end"
+            android:layout_marginEnd="48dp"
+            android:background="@drawable/letter_popup_bg"
+            android:gravity="center"
+            android:textColor="@android:color/white"
+            android:textSize="32sp"
+            android:visibility="gone" />
+
+        <ImageView
+            android:id="@+id/search_button"
+            android:layout_width="@dimen/alphabet_strip_width"
+            android:layout_height="40dp"
+            android:layout_gravity="bottom|end"
+            android:layout_marginBottom="8dp"
+            android:contentDescription="Search"
+            android:padding="8dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_search" />
+
+        <EditText
+            android:id="@+id/hidden_input"
+            android:layout_width="1dp"
+            android:layout_height="1dp"
+            android:alpha="0"
+            android:background="@null"
+            android:cursorVisible="false"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:importantForAutofill="no"
+            android:inputType="text|textNoSuggestions"
+            android:imeOptions="actionGo|flagNoExtractUi|flagNoFullscreen"
+            android:maxLines="1" />
+
+        <TextView
+            android:id="@+id/search_indicator"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|start"
+            android:layout_marginStart="16dp"
+            android:layout_marginBottom="24dp"
+            android:background="@drawable/search_indicator_bg"
+            android:paddingHorizontal="14dp"
+            android:paddingVertical="6dp"
+            android:textColor="@android:color/white"
+            android:textSize="16sp"
+            android:visibility="gone" />
+    </FrameLayout>
+
+    <!-- Alphabet strip: always visible, triggers app list slide-in -->
     <com.example.niagarahome.AlphabetStripView
         android:id="@+id/alphabet_strip"
         android:layout_width="@dimen/alphabet_strip_width"
@@ -25,55 +93,4 @@
         android:layout_gravity="end"
         android:paddingTop="24dp"
         android:paddingBottom="24dp" />
-
-    <TextView
-        android:id="@+id/letter_popup"
-        android:layout_width="56dp"
-        android:layout_height="56dp"
-        android:layout_gravity="end"
-        android:layout_marginEnd="48dp"
-        android:background="@drawable/letter_popup_bg"
-        android:gravity="center"
-        android:textColor="@android:color/white"
-        android:textSize="32sp"
-        android:visibility="gone" />
-
-    <ImageView
-        android:id="@+id/search_button"
-        android:layout_width="@dimen/alphabet_strip_width"
-        android:layout_height="40dp"
-        android:layout_gravity="bottom|end"
-        android:layout_marginBottom="8dp"
-        android:contentDescription="Search"
-        android:padding="8dp"
-        android:scaleType="centerInside"
-        android:src="@drawable/ic_search" />
-
-    <EditText
-        android:id="@+id/hidden_input"
-        android:layout_width="1dp"
-        android:layout_height="1dp"
-        android:alpha="0"
-        android:background="@null"
-        android:cursorVisible="false"
-        android:focusable="true"
-        android:focusableInTouchMode="true"
-        android:importantForAutofill="no"
-        android:inputType="text|textNoSuggestions"
-        android:imeOptions="actionGo|flagNoExtractUi|flagNoFullscreen"
-        android:maxLines="1" />
-
-    <TextView
-        android:id="@+id/search_indicator"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|start"
-        android:layout_marginStart="16dp"
-        android:layout_marginBottom="24dp"
-        android:background="@drawable/search_indicator_bg"
-        android:paddingHorizontal="14dp"
-        android:paddingVertical="6dp"
-        android:textColor="@android:color/white"
-        android:textSize="16sp"
-        android:visibility="gone" />
 </FrameLayout>
