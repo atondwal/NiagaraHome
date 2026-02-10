@@ -78,9 +78,9 @@ class SettingsActivity : AppCompatActivity() {
             { Settings.stripEndMarginDp = it }
         addIntSlider("Fine Scroll Pull", 20f, 160f, 5f, Settings.fineScrollThresholdDp, "dp")
             { Settings.fineScrollThresholdDp = it }
-        addIntSlider("Bulge Margin", 0f, 60f, 2f, Settings.bulgeMarginDp, "dp")
+        addIntSlider("Bulge Margin", 0f, 120f, 2f, Settings.bulgeMarginDp, "dp")
             { Settings.bulgeMarginDp = it }
-        addIntSlider("Bulge Radius", 2f, 12f, 1f, Settings.bulgeRadius, "")
+        addIntSlider("Bulge Radius", 2f, 26f, 1f, Settings.bulgeRadius, "")
             { Settings.bulgeRadius = it }
 
         // --- Gesture ---
