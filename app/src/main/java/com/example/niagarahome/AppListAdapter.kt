@@ -23,6 +23,14 @@ class AppListAdapter(
 
     private var lastAnimatedPosition = -1
 
+    // Dynamic properties (set from Settings via applySettings)
+    var pressScale: Float = Settings.DEF_PRESS_SCALE
+    var enterAnimSlidePx: Float = Settings.DEF_ENTER_ANIM_SLIDE.toFloat()
+    var enterAnimDurationMs: Long = Settings.DEF_ENTER_ANIM_DURATION.toLong()
+    var itemVerticalPaddingPx: Int = 0
+    var itemHorizontalPaddingPx: Int = 0
+    var iconTextMarginPx: Int = 0
+
     class AppViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val icon: ImageView = view.findViewById(R.id.app_icon)
         val name: TextView = view.findViewById(R.id.app_name)
@@ -64,17 +72,31 @@ class AppListAdapter(
                 h.name.text = app.label
                 h.itemView.setOnClickListener { onClick(app) }
 
+                // Apply dynamic padding and margin
+                if (itemHorizontalPaddingPx > 0 || itemVerticalPaddingPx > 0) {
+                    h.itemView.setPadding(
+                        itemHorizontalPaddingPx, itemVerticalPaddingPx,
+                        itemHorizontalPaddingPx, itemVerticalPaddingPx
+                    )
+                }
+                if (iconTextMarginPx > 0) {
+                    val lp = h.name.layoutParams as ViewGroup.MarginLayoutParams
+                    lp.marginStart = iconTextMarginPx
+                    h.name.layoutParams = lp
+                }
+
                 // Press scale animation
+                val scale = pressScale
                 h.itemView.setOnTouchListener { v, event ->
                     when (event.action) {
                         MotionEvent.ACTION_DOWN -> {
-                            v.animate().scaleX(0.97f).scaleY(0.97f).setDuration(100).start()
+                            v.animate().scaleX(scale).scaleY(scale).setDuration(100).start()
                         }
                         MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                             v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(150).start()
                         }
                     }
-                    false // don't consume — let click listener work
+                    false
                 }
 
                 // Enter animation (fade + slide up) on first bind only
@@ -82,12 +104,12 @@ class AppListAdapter(
                     lastAnimatedPosition = position
                     val view = h.itemView
                     view.alpha = 0f
-                    view.translationY = 40f
+                    view.translationY = enterAnimSlidePx
                     val delay = (position * 15L).coerceAtMost(300L)
                     view.animate()
                         .alpha(1f)
                         .translationY(0f)
-                        .setDuration(250)
+                        .setDuration(enterAnimDurationMs)
                         .setStartDelay(delay)
                         .setInterpolator(DecelerateInterpolator())
                         .start()

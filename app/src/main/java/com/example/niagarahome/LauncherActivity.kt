@@ -7,6 +7,7 @@ import android.content.res.Configuration
 import android.os.Bundle
 import android.view.MotionEvent
 import android.view.View
+import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -24,13 +25,15 @@ class LauncherActivity : AppCompatActivity() {
     private lateinit var alphabetStrip: AlphabetStripView
     private lateinit var foldableHelper: FoldableHelper
     private lateinit var letterPopup: TextView
+    private lateinit var rootLayout: FrameLayout
 
-    // Pull-down-to-notify tracking
+    // Mutable settings-driven values
+    private var scrollSpeedFactor = Settings.DEF_SCROLL_SPEED
     private var pullDownStartY = 0f
     private var pullDownTracking = false
-    private val pullDownThresholdPx by lazy { 100 * resources.displayMetrics.density }
+    private var pullDownThresholdPx = 0f
+    private var lastBackPressTime = 0L
 
-    @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_launcher)
@@ -40,6 +43,7 @@ class LauncherActivity : AppCompatActivity() {
         adapter = AppListAdapter { app -> launchApp(app) }
         layoutManager = LinearLayoutManager(this)
 
+        rootLayout = findViewById(R.id.root_layout)
         recyclerView = findViewById(R.id.app_list)
         recyclerView.layoutManager = layoutManager
         recyclerView.adapter = adapter
@@ -54,13 +58,10 @@ class LauncherActivity : AppCompatActivity() {
             if (letter != null) {
                 letterPopup.text = letter.toString()
                 letterPopup.visibility = View.VISIBLE
-                // Position vertically centered on the letter in the strip
                 val stripLocation = IntArray(2)
                 alphabetStrip.getLocationInWindow(stripLocation)
-                val popupLocation = IntArray(2)
-                letterPopup.getLocationInWindow(popupLocation)
                 val rootLocation = IntArray(2)
-                findViewById<View>(R.id.root_layout).getLocationInWindow(rootLocation)
+                rootLayout.getLocationInWindow(rootLocation)
                 letterPopup.translationY = stripLocation[1] - rootLocation[1] + y - letterPopup.height / 2f
                 letterPopup.alpha = 1f
             } else {
@@ -71,7 +72,6 @@ class LauncherActivity : AppCompatActivity() {
         }
 
         repository.apps.observe(this) { apps ->
-            // Build interleaved list with section headers
             val items = mutableListOf<ListItem>()
             val positions = mutableMapOf<Char, Int>()
             var lastLetter: Char? = null
@@ -90,11 +90,7 @@ class LauncherActivity : AppCompatActivity() {
             alphabetStrip.setLetterPositions(positions)
         }
 
-        // Pull-down to open notification shade
-        val rootLayout = findViewById<View>(R.id.root_layout)
-        rootLayout.setOnTouchListener { _, event ->
-            handlePullDown(event)
-        }
+        // Settings entry is via double-tap back button (see onBackPressed)
 
         foldableHelper = FoldableHelper(this)
         foldableHelper.observe(lifecycle, lifecycleScope)
@@ -106,25 +102,83 @@ class LauncherActivity : AppCompatActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        repository.register()
+        applySettings()
+    }
+
+    private fun applySettings() {
+        val density = resources.displayMetrics.density
+
+        // RecyclerView padding
+        recyclerView.setPadding(
+            0,
+            (Settings.listTopPaddingDp * density).toInt(),
+            (Settings.alphabetStripWidthDp * density).toInt(),
+            (Settings.listBottomPaddingDp * density).toInt()
+        )
+
+        // Alphabet strip width + padding
+        alphabetStrip.layoutParams = (alphabetStrip.layoutParams).apply {
+            width = (Settings.alphabetStripWidthDp * density).toInt()
+        }
+        val stripPad = (Settings.stripVerticalPaddingDp * density).toInt()
+        alphabetStrip.setPadding(0, stripPad, 0, stripPad)
+
+        // Alphabet strip visual properties
+        alphabetStrip.pillOpacityPercent = Settings.pillOpacityPercent
+        alphabetStrip.pillCornerRadiusDp = Settings.pillCornerRadiusDp
+        alphabetStrip.highlightScale = Settings.highlightScale
+
+        // Adapter properties
+        adapter.pressScale = Settings.pressScale
+        adapter.enterAnimSlidePx = Settings.enterAnimSlideDp * density
+        adapter.enterAnimDurationMs = Settings.enterAnimDurationMs.toLong()
+        adapter.itemVerticalPaddingPx = (Settings.itemVerticalPaddingDp * density).toInt()
+        adapter.itemHorizontalPaddingPx = (Settings.itemHorizontalPaddingDp * density).toInt()
+        adapter.iconTextMarginPx = (Settings.iconTextMarginDp * density).toInt()
+        adapter.resetAnimations()
+
+        // Scroll speed
+        scrollSpeedFactor = Settings.scrollSpeed
+
+        // Pull-down threshold
+        pullDownThresholdPx = Settings.pullDownThresholdDp * density
+
+        // Letter popup margin (position relative to strip)
+        val popupMargin = (Settings.alphabetStripWidthDp * density).toInt() + (16 * density).toInt()
+        (letterPopup.layoutParams as FrameLayout.LayoutParams).marginEnd = popupMargin
+
+        // Force rebind visible items to pick up new padding/scale
+        adapter.notifyDataSetChanged()
+    }
+
     private fun smoothScrollTo(position: Int) {
         val firstVisible = layoutManager.findFirstVisibleItemPosition()
         val distance = kotlin.math.abs(position - firstVisible)
 
         if (distance > 20) {
-            // For large jumps, snap close first then smooth-scroll the last few items
             val snapTo = if (position > firstVisible) position - 5 else position + 5
             layoutManager.scrollToPositionWithOffset(snapTo.coerceIn(0, adapter.itemCount - 1), 0)
         }
 
+        val speed = scrollSpeedFactor
         val scroller = object : LinearSmoothScroller(this) {
             override fun getVerticalSnapPreference(): Int = SNAP_TO_START
             override fun calculateSpeedPerPixel(displayMetrics: android.util.DisplayMetrics): Float {
-                // ~4x faster than default (default is ~25ms/inch ≈ 0.01563 ms/px)
-                return 4f / displayMetrics.densityDpi
+                return speed / displayMetrics.densityDpi
             }
         }
         scroller.targetPosition = position
         layoutManager.startSmoothScroll(scroller)
+    }
+
+    // Intercept ALL touches for pull-down detection (fixes the bug where
+    // setOnTouchListener on root never fires because RecyclerView consumes events)
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if (handlePullDown(event)) return true
+        return super.dispatchTouchEvent(event)
     }
 
     @SuppressLint("WrongConstant")
@@ -163,11 +217,6 @@ class LauncherActivity : AppCompatActivity() {
         }
     }
 
-    override fun onStart() {
-        super.onStart()
-        repository.register()
-    }
-
     override fun onStop() {
         super.onStop()
         repository.unregister()
@@ -180,7 +229,13 @@ class LauncherActivity : AppCompatActivity() {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        // Do nothing — we ARE the home screen
+        val now = System.currentTimeMillis()
+        if (now - lastBackPressTime < 400) {
+            startActivity(Intent(this, SettingsActivity::class.java))
+            lastBackPressTime = 0L
+        } else {
+            lastBackPressTime = now
+        }
     }
 
     private fun launchApp(app: AppInfo) {

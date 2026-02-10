@@ -19,10 +19,20 @@ class AlphabetStripView @JvmOverloads constructor(
     var onLetterSelected: ((Int) -> Unit)? = null
     var onLetterPreview: ((Char?, Float) -> Unit)? = null
 
+    // Dynamic properties (set from Settings via applySettings)
+    var pillOpacityPercent: Int = Settings.DEF_PILL_OPACITY
+        set(value) { field = value; invalidate() }
+    var pillCornerRadiusDp: Int = Settings.DEF_PILL_CORNER_RADIUS
+        set(value) { field = value; invalidate() }
+    var highlightScale: Float = Settings.DEF_HIGHLIGHT_SCALE
+        set(value) { field = value; invalidate() }
+
     private var letters: List<Char> = emptyList()
     private var letterPositions: Map<Char, Int> = emptyMap()
     private var selectedIndex = -1
     private var isDragging = false
+
+    private val density = resources.displayMetrics.density
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
@@ -34,12 +44,8 @@ class AlphabetStripView @JvmOverloads constructor(
         textAlign = Paint.Align.CENTER
     }
 
-    private val pillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.argb(26, 255, 255, 255) // 10% white
-    }
-
+    private val pillPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val pillRect = RectF()
-    private val pillCornerRadius = 12f * resources.displayMetrics.density
 
     private var baseFontSize = 12f
 
@@ -63,14 +69,17 @@ class AlphabetStripView @JvmOverloads constructor(
         if (letters.isEmpty()) return
 
         // Draw background pill
-        val pillPadding = 4f * resources.displayMetrics.density
+        val alpha = (pillOpacityPercent * 255 / 100).coerceIn(0, 255)
+        pillPaint.color = Color.argb(alpha, 255, 255, 255)
+        val pillPadding = 4f * density
+        val cornerRadius = pillCornerRadiusDp * density
         pillRect.set(
             pillPadding,
             paddingTop.toFloat(),
             width - pillPadding,
             height - paddingBottom.toFloat()
         )
-        canvas.drawRoundRect(pillRect, pillCornerRadius, pillCornerRadius, pillPaint)
+        canvas.drawRoundRect(pillRect, cornerRadius, cornerRadius, pillPaint)
 
         val centerX = width / 2f
         val totalHeight = height - paddingTop - paddingBottom
@@ -80,7 +89,7 @@ class AlphabetStripView @JvmOverloads constructor(
             val y = paddingTop + letterHeight * i + letterHeight / 2f
 
             if (i == selectedIndex && isDragging) {
-                highlightPaint.textSize = baseFontSize * 1.4f
+                highlightPaint.textSize = baseFontSize * highlightScale
                 val metrics = highlightPaint.fontMetrics
                 canvas.drawText(letter.toString(), centerX, y - (metrics.ascent + metrics.descent) / 2f, highlightPaint)
             } else {
@@ -129,9 +138,7 @@ class AlphabetStripView @JvmOverloads constructor(
             if (position != null) {
                 onLetterSelected?.invoke(position)
             }
-            // Haptic tick on each letter change
             performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-            // Letter preview callback with Y position for popup placement
             val letterY = paddingTop + letterHeight * index + letterHeight / 2f
             onLetterPreview?.invoke(letter, letterY)
             invalidate()
