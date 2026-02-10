@@ -85,6 +85,11 @@ class AppListAdapter(
             is ListItem.AppItem -> {
                 val app = item.appInfo
                 val h = holder as AppViewHolder
+                h.itemView.animate().cancel()
+                h.itemView.alpha = 1f
+                h.itemView.translationY = 0f
+                h.itemView.scaleX = 1f
+                h.itemView.scaleY = 1f
                 h.icon.setImageDrawable(app.icon)
                 h.name.text = app.label
                 h.itemView.setOnClickListener { onClick(app) }

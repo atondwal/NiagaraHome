@@ -77,6 +77,7 @@ class AlphabetStripView @JvmOverloads constructor(
         val centerX = margin + (width - margin) / 2f
         val totalHeight = height - paddingTop - paddingBottom
         val letterHeight = totalHeight.toFloat() / letters.size
+        val fontSize = baseFontSize.coerceAtMost(letterHeight * 0.85f)
 
         for ((i, letter) in letters.withIndex()) {
             val y = paddingTop + letterHeight * i + letterHeight / 2f
@@ -96,11 +97,11 @@ class AlphabetStripView @JvmOverloads constructor(
 
             val drawX = centerX + offsetX
             if (i == selectedIndex && isDragging) {
-                highlightPaint.textSize = baseFontSize * scale.coerceAtLeast(highlightScale)
+                highlightPaint.textSize = fontSize * scale.coerceAtLeast(highlightScale)
                 val metrics = highlightPaint.fontMetrics
                 canvas.drawText(letter.toString(), drawX, y - (metrics.ascent + metrics.descent) / 2f, highlightPaint)
             } else {
-                paint.textSize = baseFontSize * scale
+                paint.textSize = fontSize * scale
                 val metrics = paint.fontMetrics
                 canvas.drawText(letter.toString(), drawX, y - (metrics.ascent + metrics.descent) / 2f, paint)
             }
