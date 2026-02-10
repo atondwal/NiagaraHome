@@ -40,6 +40,7 @@ class LauncherActivity : AppCompatActivity() {
     private var pullDownStartY = 0f
     private var pullDownTracking = false
     private var pullDownThresholdPx = 0f
+    private var settingsApplied = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -119,10 +120,11 @@ class LauncherActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         repository.register()
-        applySettings()
+        applySettings(resetAnimations = !settingsApplied)
+        settingsApplied = true
     }
 
-    private fun applySettings() {
+    private fun applySettings(resetAnimations: Boolean = false) {
         val density = resources.displayMetrics.density
 
         // RecyclerView padding
@@ -152,7 +154,9 @@ class LauncherActivity : AppCompatActivity() {
         adapter.itemVerticalPaddingPx = (Settings.itemVerticalPaddingDp * density).toInt()
         adapter.itemHorizontalPaddingPx = (Settings.itemHorizontalPaddingDp * density).toInt()
         adapter.iconTextMarginPx = (Settings.iconTextMarginDp * density).toInt()
-        adapter.resetAnimations()
+        if (resetAnimations) {
+            adapter.resetAnimations()
+        }
 
         // Scroll speed
         scrollSpeedFactor = Settings.scrollSpeed
