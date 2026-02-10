@@ -16,7 +16,7 @@ class AlphabetStripView @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : View(context, attrs, defStyleAttr) {
 
-    var onLetterSelected: ((Int) -> Unit)? = null
+    var onLetterSelected: ((Char) -> Unit)? = null
     var onLetterPreview: ((Char?, Float) -> Unit)? = null
     var onFineScroll: ((Float) -> Unit)? = null  // 0.0 = top, 1.0 = bottom
 
@@ -176,10 +176,7 @@ class AlphabetStripView @JvmOverloads constructor(
             if (index != selectedIndex) {
                 selectedIndex = index
                 val letter = letters[index]
-                val position = letterPositions[letter]
-                if (position != null) {
-                    onLetterSelected?.invoke(position)
-                }
+                onLetterSelected?.invoke(letter)
                 performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                 val letterY = paddingTop + letterHeight * index + letterHeight / 2f
                 onLetterPreview?.invoke(letter, letterY)

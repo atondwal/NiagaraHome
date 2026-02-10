@@ -46,6 +46,7 @@ class LauncherActivity : AppCompatActivity() {
     private var searchQuery = ""
     private var fullItems: List<ListItem> = emptyList()
     private var updatingInput = false
+    private var stripFilterActive = false
 
     // Mutable settings-driven values
     private var pullDownStartY = 0f
@@ -93,10 +94,14 @@ class LauncherActivity : AppCompatActivity() {
         searchButton.setOnClickListener { showKeyboard() }
 
         alphabetStrip = findViewById(R.id.alphabet_strip)
-        alphabetStrip.onLetterSelected = { position ->
-            smoothScrollTo(position)
+        alphabetStrip.onLetterSelected = { letter ->
+            filterByLetter(letter)
         }
         alphabetStrip.onFineScroll = { fraction ->
+            if (stripFilterActive) {
+                stripFilterActive = false
+                submitItemsWithPositions(fullItems)
+            }
             val totalItems = adapter.itemCount
             if (totalItems > 0) {
                 val target = (fraction * totalItems).toInt().coerceIn(0, totalItems - 1)
@@ -117,6 +122,10 @@ class LauncherActivity : AppCompatActivity() {
                 letterPopup.animate().alpha(0f).setDuration(150).withEndAction {
                     letterPopup.visibility = View.GONE
                 }.start()
+                if (stripFilterActive) {
+                    stripFilterActive = false
+                    submitItemsWithPositions(fullItems)
+                }
             }
         }
 
@@ -374,6 +383,20 @@ class LauncherActivity : AppCompatActivity() {
             startActivity(Intent(Intent.ACTION_VIEW,
                 Uri.parse("https://play.google.com/store/search?q=$query")))
         }
+    }
+
+    private fun filterByLetter(letter: Char) {
+        if (searchQuery.isNotEmpty()) return
+        stripFilterActive = true
+        val filtered = fullItems.filter { item ->
+            when (item) {
+                is ListItem.HeaderItem -> item.letter == letter
+                is ListItem.AppItem -> item.appInfo.sortLetter == letter
+                else -> false
+            }
+        }
+        adapter.submitList(filtered)
+        recyclerView.scrollToPosition(0)
     }
 
     private fun buildItemList(apps: List<AppInfo>): List<ListItem> {
