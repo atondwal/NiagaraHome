@@ -61,7 +61,8 @@ class LauncherActivity : AppCompatActivity() {
 
         adapter = AppListAdapter(
             onClick = { app -> launchApp(app) },
-            onLongClick = { app, view -> showAppContextMenu(app, view) }
+            onLongClick = { app, view -> showAppContextMenu(app, view) },
+            onPlayStoreClick = { query -> searchPlayStore(query) }
         )
 
         rootLayout = findViewById(R.id.root_layout)
@@ -357,8 +358,19 @@ class LauncherActivity : AppCompatActivity() {
             }
             items.add(appItem)
         }
+        items.add(ListItem.PlayStoreItem(searchQuery))
         adapter.submitList(items)
         recyclerView.scrollToPosition(0)
+    }
+
+    private fun searchPlayStore(query: String) {
+        clearSearch()
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://search?q=$query")))
+        } catch (_: Exception) {
+            startActivity(Intent(Intent.ACTION_VIEW,
+                Uri.parse("https://play.google.com/store/search?q=$query")))
+        }
     }
 
     private fun buildItemList(apps: List<AppInfo>): List<ListItem> {
