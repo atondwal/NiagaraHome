@@ -486,8 +486,10 @@ class LauncherActivity : AppCompatActivity() {
 
     // Intercept ALL touches for pull-down, swipe-up, and outside-tap detection
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
-        if (handlePullDown(event)) return true
-        if (handleSwipeUp(event)) return true
+        if (!widgetPage.isEditingWidget()) {
+            if (handlePullDown(event)) return true
+            if (handleSwipeUp(event)) return true
+        }
         // Tap outside app list dismisses it
         if (event.action == MotionEvent.ACTION_DOWN && appListVisible) {
             val x = event.rawX
