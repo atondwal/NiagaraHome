@@ -64,9 +64,6 @@ class SettingsActivity : AppCompatActivity() {
             { Settings.enterAnimSlideDp = it }
         addIntSlider("Anim Duration", 0f, 500f, 25f, Settings.enterAnimDurationMs, "ms")
             { Settings.enterAnimDurationMs = it }
-        addFloatSlider("Scroll Speed", 1.0f, 20.0f, 0.5f, Settings.scrollSpeed, "x", "%.1f")
-            { Settings.scrollSpeed = it }
-
         // --- Alphabet Strip ---
         addHeader("Alphabet Strip")
         addIntSlider("Pill Opacity", 0f, 40f, 1f, Settings.pillOpacityPercent, "%")
@@ -77,6 +74,8 @@ class SettingsActivity : AppCompatActivity() {
             { Settings.highlightScale = it }
         addIntSlider("Strip Padding", 0f, 48f, 2f, Settings.stripVerticalPaddingDp, "dp")
             { Settings.stripVerticalPaddingDp = it }
+        addIntSlider("Fine Scroll Pull", 20f, 160f, 5f, Settings.fineScrollThresholdDp, "dp")
+            { Settings.fineScrollThresholdDp = it }
 
         // --- Gesture ---
         addHeader("Gesture")

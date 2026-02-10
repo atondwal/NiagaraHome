@@ -49,10 +49,6 @@ object Settings {
         get() = prefs.getInt("enter_anim_duration", DEF_ENTER_ANIM_DURATION)
         set(v) = prefs.edit().putInt("enter_anim_duration", v).apply()
 
-    var scrollSpeed: Float
-        get() = prefs.getFloat("scroll_speed", DEF_SCROLL_SPEED)
-        set(v) = prefs.edit().putFloat("scroll_speed", v).apply()
-
     // --- Alphabet Strip ---
     var pillOpacityPercent: Int
         get() = prefs.getInt("pill_opacity", DEF_PILL_OPACITY)
@@ -69,6 +65,10 @@ object Settings {
     var stripVerticalPaddingDp: Int
         get() = prefs.getInt("strip_v_padding", DEF_STRIP_V_PADDING)
         set(v) = prefs.edit().putInt("strip_v_padding", v).apply()
+
+    var fineScrollThresholdDp: Int
+        get() = prefs.getInt("fine_scroll_threshold", DEF_FINE_SCROLL_THRESHOLD)
+        set(v) = prefs.edit().putInt("fine_scroll_threshold", v).apply()
 
     // --- Hidden Apps ---
     val hiddenApps: Set<String>
@@ -109,10 +109,10 @@ object Settings {
     const val DEF_PRESS_SCALE = 0.97f
     const val DEF_ENTER_ANIM_SLIDE = 40
     const val DEF_ENTER_ANIM_DURATION = 250
-    const val DEF_SCROLL_SPEED = 4.0f
     const val DEF_PILL_OPACITY = 10
     const val DEF_PILL_CORNER_RADIUS = 12
     const val DEF_HIGHLIGHT_SCALE = 1.4f
     const val DEF_STRIP_V_PADDING = 24
+    const val DEF_FINE_SCROLL_THRESHOLD = 80
     const val DEF_PULL_DOWN_THRESHOLD = 100
 }

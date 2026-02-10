@@ -36,7 +36,6 @@ class LauncherActivity : AppCompatActivity() {
     private lateinit var rootLayout: FrameLayout
 
     // Mutable settings-driven values
-    private var scrollSpeedFactor = Settings.DEF_SCROLL_SPEED
     private var pullDownStartY = 0f
     private var pullDownTracking = false
     private var pullDownThresholdPx = 0f
@@ -64,6 +63,13 @@ class LauncherActivity : AppCompatActivity() {
         alphabetStrip = findViewById(R.id.alphabet_strip)
         alphabetStrip.onLetterSelected = { position ->
             smoothScrollTo(position)
+        }
+        alphabetStrip.onFineScroll = { fraction ->
+            val totalItems = adapter.itemCount
+            if (totalItems > 0) {
+                val target = (fraction * totalItems).toInt().coerceIn(0, totalItems - 1)
+                smoothScrollTo(target)
+            }
         }
         alphabetStrip.onLetterPreview = { letter, y ->
             if (letter != null) {
@@ -98,6 +104,7 @@ class LauncherActivity : AppCompatActivity() {
             }
 
             adapter.submitList(items)
+            alphabetStrip.totalItemCount = items.size
             alphabetStrip.setLetterPositions(positions)
         }
 
@@ -147,6 +154,7 @@ class LauncherActivity : AppCompatActivity() {
         alphabetStrip.pillOpacityPercent = Settings.pillOpacityPercent
         alphabetStrip.pillCornerRadiusDp = Settings.pillCornerRadiusDp
         alphabetStrip.highlightScale = Settings.highlightScale
+        alphabetStrip.fineThresholdPx = Settings.fineScrollThresholdDp * density
 
         // Adapter properties
         adapter.pressScale = Settings.pressScale
@@ -158,9 +166,6 @@ class LauncherActivity : AppCompatActivity() {
         if (resetAnimations) {
             adapter.resetAnimations()
         }
-
-        // Scroll speed
-        scrollSpeedFactor = Settings.scrollSpeed
 
         // Pull-down threshold
         pullDownThresholdPx = Settings.pullDownThresholdDp * density
@@ -189,32 +194,11 @@ class LauncherActivity : AppCompatActivity() {
 
     private fun smoothScrollTo(position: Int) {
         val lm = layoutManager
-        val firstVisible = when (lm) {
-            is LinearLayoutManager -> lm.findFirstVisibleItemPosition()
-            is GridLayoutManager -> lm.findFirstVisibleItemPosition()
-            else -> 0
+        when (lm) {
+            is LinearLayoutManager -> lm.scrollToPositionWithOffset(position, 0)
+            is GridLayoutManager -> lm.scrollToPositionWithOffset(position, 0)
+            else -> recyclerView.scrollToPosition(position)
         }
-        val distance = kotlin.math.abs(position - firstVisible)
-
-        if (distance > 20) {
-            val snapTo = if (position > firstVisible) position - 5 else position + 5
-            val safePos = snapTo.coerceIn(0, adapter.itemCount - 1)
-            when (lm) {
-                is LinearLayoutManager -> lm.scrollToPositionWithOffset(safePos, 0)
-                is GridLayoutManager -> lm.scrollToPositionWithOffset(safePos, 0)
-                else -> recyclerView.scrollToPosition(safePos)
-            }
-        }
-
-        val speed = scrollSpeedFactor
-        val scroller = object : LinearSmoothScroller(this) {
-            override fun getVerticalSnapPreference(): Int = SNAP_TO_START
-            override fun calculateSpeedPerPixel(displayMetrics: android.util.DisplayMetrics): Float {
-                return speed / displayMetrics.densityDpi
-            }
-        }
-        scroller.targetPosition = position
-        layoutManager.startSmoothScroll(scroller)
     }
 
     // Intercept ALL touches for pull-down detection (fixes the bug where

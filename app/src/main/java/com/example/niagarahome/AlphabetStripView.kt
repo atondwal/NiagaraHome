@@ -18,6 +18,7 @@ class AlphabetStripView @JvmOverloads constructor(
 
     var onLetterSelected: ((Int) -> Unit)? = null
     var onLetterPreview: ((Char?, Float) -> Unit)? = null
+    var onFineScroll: ((Float) -> Unit)? = null  // 0.0 = top, 1.0 = bottom
 
     // Dynamic properties (set from Settings via applySettings)
     var pillOpacityPercent: Int = Settings.DEF_PILL_OPACITY
@@ -31,6 +32,9 @@ class AlphabetStripView @JvmOverloads constructor(
     private var letterPositions: Map<Char, Int> = emptyMap()
     private var selectedIndex = -1
     private var isDragging = false
+    private var isFineMode = false
+    var fineThresholdPx = Settings.DEF_FINE_SCROLL_THRESHOLD * resources.displayMetrics.density
+    var totalItemCount: Int = 0
 
     private val density = resources.displayMetrics.density
 
@@ -104,17 +108,19 @@ class AlphabetStripView @JvmOverloads constructor(
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
                 isDragging = true
+                isFineMode = false
                 parent?.requestDisallowInterceptTouchEvent(true)
                 performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                updateSelection(event.y)
+                updateSelection(event.x, event.y)
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
-                updateSelection(event.y)
+                updateSelection(event.x, event.y)
                 return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 isDragging = false
+                isFineMode = false
                 selectedIndex = -1
                 parent?.requestDisallowInterceptTouchEvent(false)
                 onLetterPreview?.invoke(null, 0f)
@@ -125,23 +131,49 @@ class AlphabetStripView @JvmOverloads constructor(
         return super.onTouchEvent(event)
     }
 
-    private fun updateSelection(y: Float) {
+    private fun updateSelection(x: Float, y: Float) {
         if (letters.isEmpty()) return
         val totalHeight = height - paddingTop - paddingBottom
         val letterHeight = totalHeight.toFloat() / letters.size
-        val index = ((y - paddingTop) / letterHeight).toInt().coerceIn(0, letters.size - 1)
 
-        if (index != selectedIndex) {
-            selectedIndex = index
-            val letter = letters[index]
-            val position = letterPositions[letter]
-            if (position != null) {
-                onLetterSelected?.invoke(position)
+        // How far left the finger has pulled from the strip (x < 0 = pulling left)
+        val pullDistance = (-x).coerceAtLeast(0f)
+        val fineFraction = (pullDistance / fineThresholdPx).coerceIn(0f, 1f)
+
+        val wasFineMode = isFineMode
+        isFineMode = fineFraction > 0.3f
+
+        if (isFineMode && totalItemCount > 0) {
+            // Fine scroll mode: vertical position maps to entire list
+            val fraction = ((y - paddingTop) / totalHeight).coerceIn(0f, 1f)
+            onFineScroll?.invoke(fraction)
+
+            // Update preview letter based on y position
+            val index = ((y - paddingTop) / letterHeight).toInt().coerceIn(0, letters.size - 1)
+            if (index != selectedIndex || !wasFineMode) {
+                selectedIndex = index
+                val letterY = paddingTop + letterHeight * index + letterHeight / 2f
+                onLetterPreview?.invoke(letters[index], letterY)
+                if (index != selectedIndex || !wasFineMode) {
+                    performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                }
+                invalidate()
             }
-            performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-            val letterY = paddingTop + letterHeight * index + letterHeight / 2f
-            onLetterPreview?.invoke(letter, letterY)
-            invalidate()
+        } else {
+            // Snap mode: snap to letter
+            val index = ((y - paddingTop) / letterHeight).toInt().coerceIn(0, letters.size - 1)
+            if (index != selectedIndex) {
+                selectedIndex = index
+                val letter = letters[index]
+                val position = letterPositions[letter]
+                if (position != null) {
+                    onLetterSelected?.invoke(position)
+                }
+                performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                val letterY = paddingTop + letterHeight * index + letterHeight / 2f
+                onLetterPreview?.invoke(letter, letterY)
+                invalidate()
+            }
         }
     }
 }
