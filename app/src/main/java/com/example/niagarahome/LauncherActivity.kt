@@ -7,8 +7,12 @@ import android.content.res.Configuration
 import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
 import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.MotionEvent
 import android.view.View
+import android.view.inputmethod.InputMethodManager
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -33,7 +37,15 @@ class LauncherActivity : AppCompatActivity() {
     private lateinit var alphabetStrip: AlphabetStripView
     private lateinit var foldableHelper: FoldableHelper
     private lateinit var letterPopup: TextView
+    private lateinit var searchIndicator: TextView
+    private lateinit var hiddenInput: EditText
+    private lateinit var searchButton: View
     private lateinit var rootLayout: FrameLayout
+
+    // Search state
+    private var searchQuery = ""
+    private var fullItems: List<ListItem> = emptyList()
+    private var updatingInput = false
 
     // Mutable settings-driven values
     private var pullDownStartY = 0f
@@ -59,6 +71,21 @@ class LauncherActivity : AppCompatActivity() {
         recyclerView.adapter = adapter
 
         letterPopup = findViewById(R.id.letter_popup)
+        searchIndicator = findViewById(R.id.search_indicator)
+
+        hiddenInput = findViewById(R.id.hidden_input)
+        hiddenInput.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                if (updatingInput) return
+                searchQuery = s?.toString() ?: ""
+                onSearchQueryChanged()
+            }
+        })
+
+        searchButton = findViewById(R.id.search_button)
+        searchButton.setOnClickListener { showKeyboard() }
 
         alphabetStrip = findViewById(R.id.alphabet_strip)
         alphabetStrip.onLetterSelected = { position ->
@@ -89,23 +116,12 @@ class LauncherActivity : AppCompatActivity() {
         }
 
         repository.apps.observe(this) { apps ->
-            val items = mutableListOf<ListItem>()
-            val positions = mutableMapOf<Char, Int>()
-            var lastLetter: Char? = null
-
-            for (app in apps) {
-                val letter = app.sortLetter
-                if (letter != lastLetter) {
-                    positions[letter] = items.size
-                    items.add(ListItem.HeaderItem(letter))
-                    lastLetter = letter
-                }
-                items.add(ListItem.AppItem(app))
+            fullItems = buildItemList(apps)
+            if (searchQuery.isEmpty()) {
+                submitItemsWithPositions(fullItems)
+            } else {
+                applySearchFilter()
             }
-
-            adapter.submitList(items)
-            alphabetStrip.totalItemCount = items.size
-            alphabetStrip.setLetterPositions(positions)
         }
 
         // Settings entry is via double-tap back button (see onBackPressed)
@@ -129,6 +145,8 @@ class LauncherActivity : AppCompatActivity() {
         repository.register()
         applySettings(resetAnimations = !settingsApplied)
         settingsApplied = true
+        clearSearch()
+        recyclerView.requestFocus()
         recyclerView.scrollToPosition(0)
     }
 
@@ -265,12 +283,99 @@ class LauncherActivity : AppCompatActivity() {
     }
 
     private fun launchApp(app: AppInfo) {
+        clearSearch()
         val intent = Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_LAUNCHER)
             component = ComponentName(app.packageName, app.activityName)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
         }
         startActivity(intent)
+    }
+
+    private fun onSearchQueryChanged() {
+        if (searchQuery.isEmpty()) {
+            searchIndicator.visibility = View.GONE
+            alphabetStrip.visibility = View.VISIBLE
+            searchButton.visibility = View.VISIBLE
+            submitItemsWithPositions(fullItems)
+            recyclerView.scrollToPosition(0)
+        } else {
+            searchIndicator.text = searchQuery
+            searchIndicator.visibility = View.VISIBLE
+            alphabetStrip.visibility = View.GONE
+            searchButton.visibility = View.GONE
+            applySearchFilter()
+        }
+    }
+
+    private fun clearSearch() {
+        if (searchQuery.isNotEmpty()) {
+            searchQuery = ""
+            updatingInput = true
+            hiddenInput.text.clear()
+            updatingInput = false
+            searchIndicator.visibility = View.GONE
+            alphabetStrip.visibility = View.VISIBLE
+            searchButton.visibility = View.VISIBLE
+            submitItemsWithPositions(fullItems)
+        }
+        hideKeyboard()
+        hiddenInput.clearFocus()
+        recyclerView.requestFocus()
+    }
+
+    private fun showKeyboard() {
+        hiddenInput.requestFocus()
+        val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
+        imm.showSoftInput(hiddenInput, InputMethodManager.SHOW_IMPLICIT)
+    }
+
+    private fun hideKeyboard() {
+        val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
+        imm.hideSoftInputFromWindow(hiddenInput.windowToken, 0)
+    }
+
+    private fun applySearchFilter() {
+        val filtered = fullItems.filterIsInstance<ListItem.AppItem>()
+            .filter { it.appInfo.label.contains(searchQuery, ignoreCase = true) }
+        val items = mutableListOf<ListItem>()
+        var lastLetter: Char? = null
+        for (appItem in filtered) {
+            val letter = appItem.appInfo.sortLetter
+            if (letter != lastLetter) {
+                items.add(ListItem.HeaderItem(letter))
+                lastLetter = letter
+            }
+            items.add(appItem)
+        }
+        adapter.submitList(items)
+        recyclerView.scrollToPosition(0)
+    }
+
+    private fun buildItemList(apps: List<AppInfo>): List<ListItem> {
+        val items = mutableListOf<ListItem>()
+        var lastLetter: Char? = null
+        for (app in apps) {
+            val letter = app.sortLetter
+            if (letter != lastLetter) {
+                items.add(ListItem.HeaderItem(letter))
+                lastLetter = letter
+            }
+            items.add(ListItem.AppItem(app))
+        }
+        return items
+    }
+
+    private fun submitItemsWithPositions(items: List<ListItem>) {
+        adapter.submitList(items)
+        val positions = mutableMapOf<Char, Int>()
+        items.forEachIndexed { index, item ->
+            if (item is ListItem.HeaderItem && item.letter !in positions) {
+                positions[item.letter] = index
+            }
+        }
+        alphabetStrip.totalItemCount = items.size
+        alphabetStrip.setLetterPositions(positions)
     }
 
     private fun showAppContextMenu(app: AppInfo, anchor: View) {
