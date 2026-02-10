@@ -70,6 +70,8 @@ class LauncherActivity : AppCompatActivity() {
     private var pullDownThresholdPx = 0f
     private var swipeUpStartY = 0f
     private var swipeUpTracking = false
+    private var searchSwipeDownStartY = 0f
+    private var searchSwipeDownTracking = false
     private var settingsApplied = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -209,6 +211,13 @@ class LauncherActivity : AppCompatActivity() {
         restoreSavedWidgets()
         recyclerView.requestFocus()
         recyclerView.scrollToPosition(0)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (appListVisible) {
+            hideAppList()
+        }
     }
 
     override fun onStop() {
@@ -501,6 +510,7 @@ class LauncherActivity : AppCompatActivity() {
         if (!widgetPage.isEditingWidget()) {
             if (handlePullDown(event)) return true
             if (handleSwipeUp(event)) return true
+            if (handleSearchSwipeDown(event)) return true
         }
         // Tap outside app list dismisses it
         if (event.action == MotionEvent.ACTION_DOWN && appListVisible) {
@@ -566,6 +576,32 @@ class LauncherActivity : AppCompatActivity() {
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 swipeUpTracking = false
+            }
+        }
+        return false
+    }
+
+    private fun handleSearchSwipeDown(event: MotionEvent): Boolean {
+        if (!appListVisible) return false
+        when (event.action) {
+            MotionEvent.ACTION_DOWN -> {
+                if (!recyclerView.canScrollVertically(-1)) {
+                    searchSwipeDownStartY = event.rawY
+                    searchSwipeDownTracking = true
+                }
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (searchSwipeDownTracking) {
+                    val deltaY = event.rawY - searchSwipeDownStartY
+                    if (deltaY > pullDownThresholdPx) {
+                        searchSwipeDownTracking = false
+                        hideAppList()
+                        return true
+                    }
+                }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                searchSwipeDownTracking = false
             }
         }
         return false
