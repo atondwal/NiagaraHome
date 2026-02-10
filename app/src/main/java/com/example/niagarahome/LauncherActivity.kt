@@ -135,20 +135,22 @@ class LauncherActivity : AppCompatActivity() {
     private fun applySettings(resetAnimations: Boolean = false) {
         val density = resources.displayMetrics.density
 
+        // Alphabet strip margin + width
+        val stripMargin = (Settings.stripEndMarginDp * density).toInt()
+        val stripLp = alphabetStrip.layoutParams as FrameLayout.LayoutParams
+        stripLp.width = (Settings.alphabetStripWidthDp * density).toInt()
+        stripLp.marginEnd = stripMargin
+        alphabetStrip.layoutParams = stripLp
+        val stripPad = (Settings.stripVerticalPaddingDp * density).toInt()
+        alphabetStrip.setPadding(0, stripPad, 0, stripPad)
+
         // RecyclerView padding
         recyclerView.setPadding(
             0,
             (Settings.listTopPaddingDp * density).toInt(),
-            (Settings.alphabetStripWidthDp * density).toInt(),
+            (Settings.alphabetStripWidthDp * density + stripMargin).toInt(),
             (Settings.listBottomPaddingDp * density).toInt()
         )
-
-        // Alphabet strip width + padding
-        alphabetStrip.layoutParams = (alphabetStrip.layoutParams).apply {
-            width = (Settings.alphabetStripWidthDp * density).toInt()
-        }
-        val stripPad = (Settings.stripVerticalPaddingDp * density).toInt()
-        alphabetStrip.setPadding(0, stripPad, 0, stripPad)
 
         // Alphabet strip visual properties
         alphabetStrip.pillOpacityPercent = Settings.pillOpacityPercent

@@ -66,6 +66,10 @@ object Settings {
         get() = prefs.getInt("strip_v_padding", DEF_STRIP_V_PADDING)
         set(v) = prefs.edit().putInt("strip_v_padding", v).apply()
 
+    var stripEndMarginDp: Int
+        get() = prefs.getInt("strip_end_margin", DEF_STRIP_END_MARGIN)
+        set(v) = prefs.edit().putInt("strip_end_margin", v).apply()
+
     var fineScrollThresholdDp: Int
         get() = prefs.getInt("fine_scroll_threshold", DEF_FINE_SCROLL_THRESHOLD)
         set(v) = prefs.edit().putInt("fine_scroll_threshold", v).apply()
@@ -121,6 +125,7 @@ object Settings {
     const val DEF_PILL_CORNER_RADIUS = 12
     const val DEF_HIGHLIGHT_SCALE = 1.4f
     const val DEF_STRIP_V_PADDING = 24
+    const val DEF_STRIP_END_MARGIN = 4
     const val DEF_FINE_SCROLL_THRESHOLD = 80
     const val DEF_BULGE_MARGIN = 24
     const val DEF_BULGE_RADIUS = 6

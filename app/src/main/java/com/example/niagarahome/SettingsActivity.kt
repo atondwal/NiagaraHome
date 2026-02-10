@@ -74,6 +74,8 @@ class SettingsActivity : AppCompatActivity() {
             { Settings.highlightScale = it }
         addIntSlider("Strip Padding", 0f, 48f, 2f, Settings.stripVerticalPaddingDp, "dp")
             { Settings.stripVerticalPaddingDp = it }
+        addIntSlider("Strip Edge Margin", 0f, 24f, 1f, Settings.stripEndMarginDp, "dp")
+            { Settings.stripEndMarginDp = it }
         addIntSlider("Fine Scroll Pull", 20f, 160f, 5f, Settings.fineScrollThresholdDp, "dp")
             { Settings.fineScrollThresholdDp = it }
         addIntSlider("Bulge Margin", 0f, 60f, 2f, Settings.bulgeMarginDp, "dp")
