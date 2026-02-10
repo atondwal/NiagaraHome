@@ -9,6 +9,7 @@ import android.util.AttributeSet
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
+import kotlin.math.exp
 
 class AlphabetStripView @JvmOverloads constructor(
     context: Context,
@@ -35,6 +36,13 @@ class AlphabetStripView @JvmOverloads constructor(
     private var isFineMode = false
     var fineThresholdPx = Settings.DEF_FINE_SCROLL_THRESHOLD * resources.displayMetrics.density
     var totalItemCount: Int = 0
+
+    // Deformation state
+    private var touchY = 0f
+    private var pullAmount = 0f  // 0..1, how far pulled
+    private var pullDistancePx = 0f  // actual pixel distance pulled
+    var bulgeMarginPx = Settings.DEF_BULGE_MARGIN * resources.displayMetrics.density
+    var bulgeRadius = Settings.DEF_BULGE_RADIUS.toFloat()
 
     private val density = resources.displayMetrics.density
 
@@ -92,14 +100,28 @@ class AlphabetStripView @JvmOverloads constructor(
         for ((i, letter) in letters.withIndex()) {
             val y = paddingTop + letterHeight * i + letterHeight / 2f
 
+            // Calculate horizontal offset for bulge deformation
+            var offsetX = 0f
+            var scale = 1f
+            if (isDragging && pullAmount > 0f) {
+                val distFromTouch = kotlin.math.abs(y - touchY) / letterHeight
+                // Gaussian-ish falloff: peaks at touch point, fades over bulgeRadius letters
+                val falloff = exp(-(distFromTouch * distFromTouch) / bulgeRadius)
+                // Offset = pull distance + margin, so letters appear past the finger
+                offsetX = -(pullDistancePx + bulgeMarginPx) * falloff
+                // Scale up letters near the touch point
+                scale = 1f + (highlightScale - 1f) * pullAmount * falloff
+            }
+
+            val drawX = centerX + offsetX
             if (i == selectedIndex && isDragging) {
-                highlightPaint.textSize = baseFontSize * highlightScale
+                highlightPaint.textSize = baseFontSize * scale.coerceAtLeast(highlightScale)
                 val metrics = highlightPaint.fontMetrics
-                canvas.drawText(letter.toString(), centerX, y - (metrics.ascent + metrics.descent) / 2f, highlightPaint)
+                canvas.drawText(letter.toString(), drawX, y - (metrics.ascent + metrics.descent) / 2f, highlightPaint)
             } else {
-                paint.textSize = baseFontSize
+                paint.textSize = baseFontSize * scale
                 val metrics = paint.fontMetrics
-                canvas.drawText(letter.toString(), centerX, y - (metrics.ascent + metrics.descent) / 2f, paint)
+                canvas.drawText(letter.toString(), drawX, y - (metrics.ascent + metrics.descent) / 2f, paint)
             }
         }
     }
@@ -122,6 +144,8 @@ class AlphabetStripView @JvmOverloads constructor(
                 isDragging = false
                 isFineMode = false
                 selectedIndex = -1
+                pullAmount = 0f
+                pullDistancePx = 0f
                 parent?.requestDisallowInterceptTouchEvent(false)
                 onLetterPreview?.invoke(null, 0f)
                 invalidate()
@@ -140,6 +164,11 @@ class AlphabetStripView @JvmOverloads constructor(
         val pullDistance = (-x).coerceAtLeast(0f)
         val fineFraction = (pullDistance / fineThresholdPx).coerceIn(0f, 1f)
 
+        // Update deformation state
+        touchY = y
+        pullAmount = fineFraction
+        pullDistancePx = pullDistance
+
         val wasFineMode = isFineMode
         isFineMode = fineFraction > 0.3f
 
@@ -157,7 +186,6 @@ class AlphabetStripView @JvmOverloads constructor(
                 if (index != selectedIndex || !wasFineMode) {
                     performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                 }
-                invalidate()
             }
         } else {
             // Snap mode: snap to letter
@@ -172,8 +200,8 @@ class AlphabetStripView @JvmOverloads constructor(
                 performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                 val letterY = paddingTop + letterHeight * index + letterHeight / 2f
                 onLetterPreview?.invoke(letter, letterY)
-                invalidate()
             }
         }
+        invalidate()
     }
 }

@@ -155,6 +155,8 @@ class LauncherActivity : AppCompatActivity() {
         alphabetStrip.pillCornerRadiusDp = Settings.pillCornerRadiusDp
         alphabetStrip.highlightScale = Settings.highlightScale
         alphabetStrip.fineThresholdPx = Settings.fineScrollThresholdDp * density
+        alphabetStrip.bulgeMarginPx = Settings.bulgeMarginDp * density
+        alphabetStrip.bulgeRadius = Settings.bulgeRadius.toFloat()
 
         // Adapter properties
         adapter.pressScale = Settings.pressScale

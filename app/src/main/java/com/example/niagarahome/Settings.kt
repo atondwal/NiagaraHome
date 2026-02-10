@@ -70,6 +70,14 @@ object Settings {
         get() = prefs.getInt("fine_scroll_threshold", DEF_FINE_SCROLL_THRESHOLD)
         set(v) = prefs.edit().putInt("fine_scroll_threshold", v).apply()
 
+    var bulgeMarginDp: Int
+        get() = prefs.getInt("bulge_margin", DEF_BULGE_MARGIN)
+        set(v) = prefs.edit().putInt("bulge_margin", v).apply()
+
+    var bulgeRadius: Int
+        get() = prefs.getInt("bulge_radius", DEF_BULGE_RADIUS)
+        set(v) = prefs.edit().putInt("bulge_radius", v).apply()
+
     // --- Hidden Apps ---
     val hiddenApps: Set<String>
         get() = prefs.getStringSet("hidden_apps", emptySet()) ?: emptySet()
@@ -114,5 +122,7 @@ object Settings {
     const val DEF_HIGHLIGHT_SCALE = 1.4f
     const val DEF_STRIP_V_PADDING = 24
     const val DEF_FINE_SCROLL_THRESHOLD = 80
+    const val DEF_BULGE_MARGIN = 24
+    const val DEF_BULGE_RADIUS = 6
     const val DEF_PULL_DOWN_THRESHOLD = 100
 }

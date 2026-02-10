@@ -76,6 +76,10 @@ class SettingsActivity : AppCompatActivity() {
             { Settings.stripVerticalPaddingDp = it }
         addIntSlider("Fine Scroll Pull", 20f, 160f, 5f, Settings.fineScrollThresholdDp, "dp")
             { Settings.fineScrollThresholdDp = it }
+        addIntSlider("Bulge Margin", 0f, 60f, 2f, Settings.bulgeMarginDp, "dp")
+            { Settings.bulgeMarginDp = it }
+        addIntSlider("Bulge Radius", 2f, 12f, 1f, Settings.bulgeRadius, "")
+            { Settings.bulgeRadius = it }
 
         // --- Gesture ---
         addHeader("Gesture")
