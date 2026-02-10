@@ -4,7 +4,9 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.RectF
 import android.util.AttributeSet
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 
@@ -15,6 +17,7 @@ class AlphabetStripView @JvmOverloads constructor(
 ) : View(context, attrs, defStyleAttr) {
 
     var onLetterSelected: ((Int) -> Unit)? = null
+    var onLetterPreview: ((Char?, Float) -> Unit)? = null
 
     private var letters: List<Char> = emptyList()
     private var letterPositions: Map<Char, Int> = emptyMap()
@@ -31,6 +34,13 @@ class AlphabetStripView @JvmOverloads constructor(
         textAlign = Paint.Align.CENTER
     }
 
+    private val pillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(26, 255, 255, 255) // 10% white
+    }
+
+    private val pillRect = RectF()
+    private val pillCornerRadius = 12f * resources.displayMetrics.density
+
     private var baseFontSize = 12f
 
     init {
@@ -39,7 +49,6 @@ class AlphabetStripView @JvmOverloads constructor(
 
     fun setLetterPositions(positions: Map<Char, Int>) {
         letterPositions = positions
-        // Build sorted letter list: # at end, A-Z in order
         val sorted = mutableListOf<Char>()
         for (c in 'A'..'Z') {
             if (c in positions) sorted.add(c)
@@ -52,6 +61,16 @@ class AlphabetStripView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         if (letters.isEmpty()) return
+
+        // Draw background pill
+        val pillPadding = 4f * resources.displayMetrics.density
+        pillRect.set(
+            pillPadding,
+            paddingTop.toFloat(),
+            width - pillPadding,
+            height - paddingBottom.toFloat()
+        )
+        canvas.drawRoundRect(pillRect, pillCornerRadius, pillCornerRadius, pillPaint)
 
         val centerX = width / 2f
         val totalHeight = height - paddingTop - paddingBottom
@@ -77,6 +96,7 @@ class AlphabetStripView @JvmOverloads constructor(
             MotionEvent.ACTION_DOWN -> {
                 isDragging = true
                 parent?.requestDisallowInterceptTouchEvent(true)
+                performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                 updateSelection(event.y)
                 return true
             }
@@ -88,6 +108,7 @@ class AlphabetStripView @JvmOverloads constructor(
                 isDragging = false
                 selectedIndex = -1
                 parent?.requestDisallowInterceptTouchEvent(false)
+                onLetterPreview?.invoke(null, 0f)
                 invalidate()
                 return true
             }
@@ -108,6 +129,11 @@ class AlphabetStripView @JvmOverloads constructor(
             if (position != null) {
                 onLetterSelected?.invoke(position)
             }
+            // Haptic tick on each letter change
+            performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+            // Letter preview callback with Y position for popup placement
+            val letterY = paddingTop + letterHeight * index + letterHeight / 2f
+            onLetterPreview?.invoke(letter, letterY)
             invalidate()
         }
     }

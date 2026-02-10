@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root_layout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@android:color/black"
+    android:clipChildren="false"
+    android:clipToPadding="false"
     android:fitsSystemWindows="true">
 
     <androidx.recyclerview.widget.RecyclerView
@@ -10,12 +13,28 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:clipToPadding="false"
+        android:paddingTop="8dp"
         android:paddingEnd="@dimen/alphabet_strip_width"
+        android:paddingBottom="48dp"
         android:scrollbars="none" />
 
     <com.example.niagarahome.AlphabetStripView
         android:id="@+id/alphabet_strip"
         android:layout_width="@dimen/alphabet_strip_width"
         android:layout_height="match_parent"
-        android:layout_gravity="end" />
+        android:layout_gravity="end"
+        android:paddingTop="24dp"
+        android:paddingBottom="24dp" />
+
+    <TextView
+        android:id="@+id/letter_popup"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_gravity="end"
+        android:layout_marginEnd="48dp"
+        android:background="@drawable/letter_popup_bg"
+        android:gravity="center"
+        android:textColor="@android:color/white"
+        android:textSize="32sp"
+        android:visibility="gone" />
 </FrameLayout>

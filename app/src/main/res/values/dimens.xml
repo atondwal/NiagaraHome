@@ -2,7 +2,7 @@
 <resources>
     <dimen name="app_icon_size">40dp</dimen>
     <dimen name="app_text_size">16sp</dimen>
-    <dimen name="alphabet_strip_width">28dp</dimen>
-    <dimen name="app_item_padding_vertical">8dp</dimen>
-    <dimen name="app_item_padding_horizontal">16dp</dimen>
+    <dimen name="alphabet_strip_width">32dp</dimen>
+    <dimen name="app_item_padding_vertical">12dp</dimen>
+    <dimen name="app_item_padding_horizontal">20dp</dimen>
 </resources>
