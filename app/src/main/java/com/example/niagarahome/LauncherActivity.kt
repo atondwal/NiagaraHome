@@ -110,10 +110,17 @@ class LauncherActivity : AppCompatActivity() {
             widgetPage.removeWidgetView(widgetId)
             widgetRepository.removeWidgetId(widgetId)
             widgetRepository.removeWidgetHeight(widgetId)
+            widgetRepository.removeWidgetWidth(widgetId)
         }
-        widgetPage.onWidgetResized = { widgetId, heightPx ->
-            val heightDp = (heightPx / resources.displayMetrics.density).toInt()
-            widgetRepository.setWidgetHeightDp(widgetId, heightDp)
+        widgetPage.onWidgetResized = { widgetId, widthPx, heightPx ->
+            val d = resources.displayMetrics.density
+            val wDp = (widthPx / d).toInt()
+            val hDp = (heightPx / d).toInt()
+            widgetRepository.setWidgetHeightDp(widgetId, hDp)
+            widgetRepository.setWidgetWidthDp(widgetId, wDp)
+            // Tell the widget provider its new size so it re-renders
+            val hostView = widgetPage.findWidgetHostView(widgetId)
+            hostView?.updateAppWidgetSize(null, wDp, hDp, wDp, hDp)
         }
 
         hiddenInput = findViewById(R.id.hidden_input)
@@ -366,24 +373,28 @@ class LauncherActivity : AppCompatActivity() {
         val info = widgetRepository.getProviderInfo(widgetId) ?: return
         val hostView = widgetRepository.createView(widgetId)
         setupWidgetView(hostView, info)
-        widgetPage.addWidgetView(hostView, widgetId, widgetHeightPx(widgetId, info))
+        val (w, h) = widgetSizePx(widgetId, info)
+        widgetPage.addWidgetView(hostView, widgetId, w, h)
         widgetRepository.pendingWidgetId = -1
     }
 
     private fun setupWidgetView(hostView: NHWidgetHostView, info: android.appwidget.AppWidgetProviderInfo) {
         val density = resources.displayMetrics.density
-        // Calculate width in dp (full screen minus padding)
         val widthDp = ((resources.displayMetrics.widthPixels - (32 * density).toInt()) / density).toInt()
         val heightDp = if (info.minHeight > 0) info.minHeight else 200
         hostView.updateAppWidgetSize(null, widthDp, heightDp, widthDp, heightDp)
     }
 
-    private fun widgetHeightPx(widgetId: Int, info: android.appwidget.AppWidgetProviderInfo): Int {
+    /** Returns (widthPx, heightPx) for a widget, using saved size or provider defaults. */
+    private fun widgetSizePx(widgetId: Int, info: android.appwidget.AppWidgetProviderInfo): Pair<Int, Int> {
         val density = resources.displayMetrics.density
-        val savedDp = widgetRepository.getWidgetHeightDp(widgetId)
-        if (savedDp > 0) return (savedDp * density).toInt()
-        return if (info.minHeight > 0) (info.minHeight * density).toInt()
-        else (200 * density).toInt()
+        val savedH = widgetRepository.getWidgetHeightDp(widgetId)
+        val savedW = widgetRepository.getWidgetWidthDp(widgetId)
+        val heightPx = if (savedH > 0) (savedH * density).toInt()
+            else if (info.minHeight > 0) (info.minHeight * density).toInt()
+            else (200 * density).toInt()
+        val widthPx = if (savedW > 0) (savedW * density).toInt() else 0 // 0 = MATCH_PARENT
+        return Pair(widthPx, heightPx)
     }
 
     private fun restoreSavedWidgets() {
@@ -395,7 +406,8 @@ class LauncherActivity : AppCompatActivity() {
             if (info != null) {
                 val hostView = widgetRepository.createView(id)
                 setupWidgetView(hostView, info)
-                widgetPage.addWidgetView(hostView, id, widgetHeightPx(id, info))
+                val (w, h) = widgetSizePx(id, info)
+                widgetPage.addWidgetView(hostView, id, w, h)
             } else {
                 widgetRepository.removeWidgetId(id)
             }
