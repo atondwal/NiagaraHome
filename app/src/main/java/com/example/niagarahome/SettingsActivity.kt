@@ -66,22 +66,24 @@ class SettingsActivity : AppCompatActivity() {
             { Settings.enterAnimDurationMs = it }
         // --- Alphabet Strip ---
         addHeader("Alphabet Strip")
-        addIntSlider("Pill Opacity", 0f, 40f, 1f, Settings.pillOpacityPercent, "%")
-            { Settings.pillOpacityPercent = it }
-        addIntSlider("Pill Corner Radius", 0f, 24f, 1f, Settings.pillCornerRadiusDp, "dp")
-            { Settings.pillCornerRadiusDp = it }
         addFloatSlider("Highlight Scale", 1.0f, 2.0f, 0.1f, Settings.highlightScale, "x", "%.1f")
             { Settings.highlightScale = it }
         addIntSlider("Strip Padding", 0f, 48f, 2f, Settings.stripVerticalPaddingDp, "dp")
             { Settings.stripVerticalPaddingDp = it }
         addIntSlider("Strip Edge Margin", 0f, 24f, 1f, Settings.stripEndMarginDp, "dp")
             { Settings.stripEndMarginDp = it }
+        addIntSlider("Strip Top Margin", 0f, 300f, 4f, Settings.stripTopMarginDp, "dp")
+            { Settings.stripTopMarginDp = it }
+        addIntSlider("Strip Bottom Margin", 0f, 300f, 4f, Settings.stripBottomMarginDp, "dp")
+            { Settings.stripBottomMarginDp = it }
         addIntSlider("Fine Scroll Pull", 20f, 160f, 5f, Settings.fineScrollThresholdDp, "dp")
             { Settings.fineScrollThresholdDp = it }
         addIntSlider("Bulge Margin", 0f, 120f, 2f, Settings.bulgeMarginDp, "dp")
             { Settings.bulgeMarginDp = it }
         addIntSlider("Bulge Radius", 2f, 26f, 1f, Settings.bulgeRadius, "")
             { Settings.bulgeRadius = it }
+        addIntSlider("Touch Margin", 0f, 120f, 2f, Settings.pillTouchMarginDp, "dp")
+            { Settings.pillTouchMarginDp = it }
 
         // --- Gesture ---
         addHeader("Gesture")
