@@ -9,8 +9,8 @@ import android.util.AttributeSet
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
 import android.widget.FrameLayout
-import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 
@@ -20,7 +20,7 @@ class WidgetPageView @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : FrameLayout(context, attrs, defStyleAttr) {
 
-    private val widgetContainer: LinearLayout
+    private val widgetContainer: FlowLayout
     private val scrollView: ScrollView
     private val emptyText: TextView
     val addButton: TextView
@@ -42,12 +42,11 @@ class WidgetPageView @JvmOverloads constructor(
             setPadding(hPad, 0, hPad, bottomPad)
         }
 
-        widgetContainer = LinearLayout(context).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
+        widgetContainer = FlowLayout(context).apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
             )
-            orientation = LinearLayout.VERTICAL
         }
 
         scrollView.addView(widgetContainer)
@@ -85,17 +84,14 @@ class WidgetPageView @JvmOverloads constructor(
 
     fun addWidgetView(hostView: NHWidgetHostView, widgetId: Int, widthPx: Int = 0, heightPx: Int = 0) {
         val wrapHeight = if (heightPx > 0) heightPx else (200 * density).toInt()
-        val wrapWidth = if (widthPx > 0) widthPx else LinearLayout.LayoutParams.MATCH_PARENT
+        val wrapWidth = if (widthPx > 0) widthPx else ViewGroup.LayoutParams.MATCH_PARENT
 
         val frame = WidgetFrame(context, widgetId, hostView, wrapHeight, density, scrollView,
             onRemove = { id -> onWidgetRemove?.invoke(id) },
             onResized = { id, w, h -> onWidgetResized?.invoke(id, w, h) }
         )
-        val lp = LinearLayout.LayoutParams(wrapWidth, LinearLayout.LayoutParams.WRAP_CONTENT)
+        val lp = ViewGroup.MarginLayoutParams(wrapWidth, ViewGroup.LayoutParams.WRAP_CONTENT)
         lp.bottomMargin = (8 * density).toInt()
-        if (wrapWidth != LinearLayout.LayoutParams.MATCH_PARENT) {
-            lp.gravity = Gravity.CENTER_HORIZONTAL
-        }
         frame.layoutParams = lp
 
         // Long-press on the host view enters edit mode
@@ -171,6 +167,104 @@ class WidgetPageView @JvmOverloads constructor(
 
     private fun updateEmptyState() {
         emptyText.visibility = if (widgetContainer.childCount == 0) View.VISIBLE else View.GONE
+    }
+
+    /**
+     * ViewGroup that lays children out left-to-right, wrapping to a new row
+     * when a child doesn't fit. MATCH_PARENT-width children get a solo row.
+     */
+    private inner class FlowLayout(context: Context) : ViewGroup(context) {
+        private val hGap = (8 * density).toInt()
+
+        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+            val maxWidth = MeasureSpec.getSize(widthMeasureSpec)
+            var rowX = 0
+            var totalHeight = 0
+            var rowHeight = 0
+
+            for (i in 0 until childCount) {
+                val child = getChildAt(i)
+                if (child.visibility == View.GONE) continue
+
+                val lp = child.layoutParams as MarginLayoutParams
+                measureChildWithMargins(child, widthMeasureSpec, 0, heightMeasureSpec, 0)
+                val childW = child.measuredWidth + lp.leftMargin + lp.rightMargin
+                val childH = child.measuredHeight + lp.topMargin + lp.bottomMargin
+
+                if (lp.width == LayoutParams.MATCH_PARENT) {
+                    if (rowX > 0) {
+                        totalHeight += rowHeight
+                        rowX = 0
+                        rowHeight = 0
+                    }
+                    totalHeight += childH
+                } else {
+                    if (rowX > 0 && rowX + hGap + childW > maxWidth) {
+                        totalHeight += rowHeight
+                        rowX = childW
+                        rowHeight = childH
+                    } else {
+                        if (rowX > 0) rowX += hGap
+                        rowX += childW
+                        rowHeight = maxOf(rowHeight, childH)
+                    }
+                }
+            }
+            totalHeight += rowHeight
+
+            setMeasuredDimension(maxWidth, totalHeight)
+        }
+
+        override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+            val maxWidth = r - l
+            var rowX = 0
+            var rowY = 0
+            var rowHeight = 0
+
+            for (i in 0 until childCount) {
+                val child = getChildAt(i)
+                if (child.visibility == View.GONE) continue
+
+                val lp = child.layoutParams as MarginLayoutParams
+                val cw = child.measuredWidth
+                val ch = child.measuredHeight
+                val totalW = cw + lp.leftMargin + lp.rightMargin
+                val totalH = ch + lp.topMargin + lp.bottomMargin
+
+                if (lp.width == LayoutParams.MATCH_PARENT) {
+                    if (rowX > 0) {
+                        rowY += rowHeight
+                        rowX = 0
+                        rowHeight = 0
+                    }
+                    child.layout(
+                        lp.leftMargin, rowY + lp.topMargin,
+                        lp.leftMargin + cw, rowY + lp.topMargin + ch
+                    )
+                    rowY += totalH
+                } else {
+                    if (rowX > 0 && rowX + hGap + totalW > maxWidth) {
+                        rowY += rowHeight
+                        rowX = 0
+                        rowHeight = 0
+                    }
+                    val x = if (rowX > 0) rowX + hGap else 0
+                    child.layout(
+                        x + lp.leftMargin, rowY + lp.topMargin,
+                        x + lp.leftMargin + cw, rowY + lp.topMargin + ch
+                    )
+                    rowX = x + totalW
+                    rowHeight = maxOf(rowHeight, totalH)
+                }
+            }
+        }
+
+        override fun generateLayoutParams(attrs: AttributeSet?) =
+            MarginLayoutParams(context, attrs)
+        override fun generateLayoutParams(p: LayoutParams) = MarginLayoutParams(p)
+        override fun generateDefaultLayoutParams() =
+            MarginLayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+        override fun checkLayoutParams(p: LayoutParams) = p is MarginLayoutParams
     }
 
     /**
@@ -324,9 +418,8 @@ class WidgetPageView @JvmOverloads constructor(
                         val delta = (event.rawX - dragStartX).toInt()
                         val change = if (fromLeft) -delta else delta
                         val newWidth = (dragStartWidth + change).coerceAtLeast(minWidthPx)
-                        val lp = this@WidgetFrame.layoutParams as LinearLayout.LayoutParams
+                        val lp = this@WidgetFrame.layoutParams as ViewGroup.MarginLayoutParams
                         lp.width = newWidth
-                        lp.gravity = Gravity.CENTER_HORIZONTAL
                         this@WidgetFrame.layoutParams = lp
                         true
                     }
