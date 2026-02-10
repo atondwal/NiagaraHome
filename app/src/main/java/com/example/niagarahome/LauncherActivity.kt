@@ -32,7 +32,6 @@ class LauncherActivity : AppCompatActivity() {
     private var pullDownStartY = 0f
     private var pullDownTracking = false
     private var pullDownThresholdPx = 0f
-    private var lastBackPressTime = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -209,6 +208,7 @@ class LauncherActivity : AppCompatActivity() {
 
     @SuppressLint("WrongConstant")
     private fun expandNotificationShade() {
+        recyclerView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
         try {
             val sbm = getSystemService("statusbar")
             sbm?.javaClass?.getMethod("expandNotificationsPanel")?.invoke(sbm)
@@ -229,13 +229,7 @@ class LauncherActivity : AppCompatActivity() {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        val now = System.currentTimeMillis()
-        if (now - lastBackPressTime < 400) {
-            startActivity(Intent(this, SettingsActivity::class.java))
-            lastBackPressTime = 0L
-        } else {
-            lastBackPressTime = now
-        }
+        startActivity(Intent(this, SettingsActivity::class.java))
     }
 
     private fun launchApp(app: AppInfo) {
