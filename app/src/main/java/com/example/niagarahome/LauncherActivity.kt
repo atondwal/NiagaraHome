@@ -122,6 +122,7 @@ class LauncherActivity : AppCompatActivity() {
         repository.register()
         applySettings(resetAnimations = !settingsApplied)
         settingsApplied = true
+        recyclerView.scrollToPosition(0)
     }
 
     private fun applySettings(resetAnimations: Boolean = false) {
