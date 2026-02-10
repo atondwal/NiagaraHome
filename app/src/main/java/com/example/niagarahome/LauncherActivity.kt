@@ -99,14 +99,9 @@ class LauncherActivity : AppCompatActivity() {
         }
         alphabetStrip.onFineScroll = { fraction ->
             if (stripFilterActive) {
-                stripFilterActive = false
-                submitItemsWithPositions(fullItems)
+                endStripFilter()
             }
-            val totalItems = adapter.itemCount
-            if (totalItems > 0) {
-                val target = (fraction * totalItems).toInt().coerceIn(0, totalItems - 1)
-                smoothScrollTo(target)
-            }
+            scrollToFraction(fraction)
         }
         alphabetStrip.onLetterPreview = { letter, y ->
             if (letter != null) {
@@ -123,8 +118,7 @@ class LauncherActivity : AppCompatActivity() {
                     letterPopup.visibility = View.GONE
                 }.start()
                 if (stripFilterActive) {
-                    stripFilterActive = false
-                    submitItemsWithPositions(fullItems)
+                    endStripFilter()
                 }
             }
         }
@@ -238,6 +232,16 @@ class LauncherActivity : AppCompatActivity() {
             is GridLayoutManager -> lm.scrollToPositionWithOffset(position, 0)
             else -> recyclerView.scrollToPosition(position)
         }
+    }
+
+    private fun scrollToFraction(fraction: Float) {
+        val totalHeight = recyclerView.computeVerticalScrollRange()
+        val viewHeight = recyclerView.computeVerticalScrollExtent()
+        val maxScroll = totalHeight - viewHeight
+        if (maxScroll <= 0) return
+        val targetScroll = (fraction * maxScroll).toInt()
+        val currentScroll = recyclerView.computeVerticalScrollOffset()
+        recyclerView.scrollBy(0, targetScroll - currentScroll)
     }
 
     // Intercept ALL touches for pull-down detection (fixes the bug where
@@ -397,6 +401,11 @@ class LauncherActivity : AppCompatActivity() {
         }
         adapter.submitList(filtered)
         recyclerView.scrollToPosition(0)
+    }
+
+    private fun endStripFilter() {
+        stripFilterActive = false
+        submitItemsWithPositions(fullItems)
     }
 
     private fun buildItemList(apps: List<AppInfo>): List<ListItem> {
