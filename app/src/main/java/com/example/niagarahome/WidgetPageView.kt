@@ -3,11 +3,13 @@ package com.example.niagarahome
 import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
+import android.os.Handler
+import android.os.Looper
 import android.util.AttributeSet
-import android.util.TypedValue
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -25,12 +27,11 @@ class WidgetPageView @JvmOverloads constructor(
     val addButton: TextView
 
     var onAddWidgetClick: (() -> Unit)? = null
-    var onWidgetLongPress: ((Int) -> Unit)? = null // passes widget ID
+    var onWidgetLongPress: ((Int) -> Unit)? = null
 
     private val density = resources.displayMetrics.density
 
     init {
-        // ScrollView fills the whole page
         scrollView = ScrollView(context).apply {
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
             isVerticalScrollBarEnabled = false
@@ -52,7 +53,6 @@ class WidgetPageView @JvmOverloads constructor(
         scrollView.addView(widgetContainer)
         addView(scrollView)
 
-        // Empty state text
         emptyText = TextView(context).apply {
             layoutParams = LayoutParams(
                 LayoutParams.WRAP_CONTENT,
@@ -66,7 +66,6 @@ class WidgetPageView @JvmOverloads constructor(
         }
         addView(emptyText)
 
-        // Floating "+" button at bottom center
         val btnSize = (56 * density).toInt()
         addButton = TextView(context).apply {
             layoutParams = LayoutParams(btnSize, btnSize, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
@@ -85,24 +84,18 @@ class WidgetPageView @JvmOverloads constructor(
     }
 
     fun addWidgetView(hostView: View, widgetId: Int, heightPx: Int = 0) {
-        val wrapHeight = if (heightPx > 0) heightPx
-            else (200 * density).toInt() // default fallback
-        val wrapper = FrameLayout(context).apply {
-            tag = widgetId
-            val lp = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-            lp.bottomMargin = (12 * density).toInt()
-            layoutParams = lp
-
-            addView(hostView, LayoutParams(LayoutParams.MATCH_PARENT, wrapHeight))
-
-            setOnLongClickListener {
-                onWidgetLongPress?.invoke(widgetId)
-                true
-            }
+        val wrapHeight = if (heightPx > 0) heightPx else (200 * density).toInt()
+        val wrapper = WidgetWrapper(context, widgetId) { id ->
+            onWidgetLongPress?.invoke(id)
         }
+        val lp = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        lp.bottomMargin = (12 * density).toInt()
+        wrapper.layoutParams = lp
+        wrapper.addView(hostView, LayoutParams(LayoutParams.MATCH_PARENT, wrapHeight))
+
         widgetContainer.addView(wrapper)
         updateEmptyState()
     }
@@ -110,12 +103,25 @@ class WidgetPageView @JvmOverloads constructor(
     fun removeWidgetView(widgetId: Int) {
         for (i in 0 until widgetContainer.childCount) {
             val child = widgetContainer.getChildAt(i)
-            if (child.tag == widgetId) {
+            if (child is WidgetWrapper && child.widgetId == widgetId) {
                 widgetContainer.removeViewAt(i)
                 break
             }
         }
         updateEmptyState()
+    }
+
+    fun updateWidgetHeight(widgetId: Int, heightPx: Int) {
+        for (i in 0 until widgetContainer.childCount) {
+            val child = widgetContainer.getChildAt(i)
+            if (child is WidgetWrapper && child.widgetId == widgetId && child.childCount > 0) {
+                val hostView = child.getChildAt(0)
+                val lp = hostView.layoutParams
+                lp.height = heightPx
+                hostView.layoutParams = lp
+                break
+            }
+        }
     }
 
     fun clearWidgets() {
@@ -125,5 +131,47 @@ class WidgetPageView @JvmOverloads constructor(
 
     private fun updateEmptyState() {
         emptyText.visibility = if (widgetContainer.childCount == 0) View.VISIBLE else View.GONE
+    }
+
+    /**
+     * Custom wrapper that intercepts long-press even when the child
+     * (AppWidgetHostView) consumes touch events.
+     */
+    private class WidgetWrapper(
+        context: Context,
+        val widgetId: Int,
+        private val onLongPress: (Int) -> Unit
+    ) : FrameLayout(context) {
+
+        private val handler = Handler(Looper.getMainLooper())
+        private val longPressTimeout = ViewConfiguration.getLongPressTimeout().toLong()
+        private var downX = 0f
+        private var downY = 0f
+        private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
+        private val longPressRunnable = Runnable {
+            performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+            onLongPress(widgetId)
+        }
+
+        override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
+            when (ev.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    downX = ev.x
+                    downY = ev.y
+                    handler.postDelayed(longPressRunnable, longPressTimeout)
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = ev.x - downX
+                    val dy = ev.y - downY
+                    if (dx * dx + dy * dy > touchSlop * touchSlop) {
+                        handler.removeCallbacks(longPressRunnable)
+                    }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    handler.removeCallbacks(longPressRunnable)
+                }
+            }
+            return false // never steal events — just detect long-press on the side
+        }
     }
 }

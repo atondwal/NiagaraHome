@@ -52,7 +52,6 @@ class LauncherActivity : AppCompatActivity() {
 
     // App list visibility
     private var appListVisible = false
-    private var freshCreate = false
 
     companion object {
         private const val RC_PICK_WIDGET = 1001
@@ -108,7 +107,7 @@ class LauncherActivity : AppCompatActivity() {
         }
 
         widgetPage.onAddWidgetClick = { startWidgetPicker() }
-        widgetPage.onWidgetLongPress = { widgetId -> confirmRemoveWidget(widgetId) }
+        widgetPage.onWidgetLongPress = { widgetId -> showWidgetMenu(widgetId) }
 
         hiddenInput = findViewById(R.id.hidden_input)
         hiddenInput.addTextChangedListener(object : TextWatcher {
@@ -182,8 +181,6 @@ class LauncherActivity : AppCompatActivity() {
                 }
             }
         }
-
-        freshCreate = true
     }
 
     override fun onStart() {
@@ -194,10 +191,7 @@ class LauncherActivity : AppCompatActivity() {
         settingsApplied = true
         clearSearch()
         hideAppList(animate = false)
-        if (freshCreate) {
-            freshCreate = false
-            cleanupPendingWidget()
-        }
+        recoverPendingWidget()
         restoreSavedWidgets()
         recyclerView.requestFocus()
         recyclerView.scrollToPosition(0)
@@ -337,12 +331,25 @@ class LauncherActivity : AppCompatActivity() {
         finishAddWidget(pending)
     }
 
-    /** Clean up any orphaned pending widget ID from a previous process death. */
-    private fun cleanupPendingWidget() {
+    /** Recover a pending widget from a previous process death. If the widget is
+     *  still bound, save it so restoreSavedWidgets() will display it. The host
+     *  will receive updates automatically once the configure activity finishes. */
+    private fun recoverPendingWidget() {
         val pending = widgetRepository.pendingWidgetId
         if (pending == -1) return
-        Log.d("NHWidget", "Cleaning up orphaned pending widget $pending")
-        widgetRepository.appWidgetHost.deleteAppWidgetId(pending)
+        // Already saved (onActivityResult handled it before we got here)
+        if (pending in widgetRepository.getSavedWidgetIds()) {
+            widgetRepository.pendingWidgetId = -1
+            return
+        }
+        val info = widgetRepository.getProviderInfo(pending)
+        if (info == null) {
+            Log.d("NHWidget", "Cleaning up unbound pending widget $pending")
+            widgetRepository.appWidgetHost.deleteAppWidgetId(pending)
+        } else {
+            Log.d("NHWidget", "Recovering pending widget $pending")
+            widgetRepository.addWidgetId(pending)
+        }
         widgetRepository.pendingWidgetId = -1
     }
 
@@ -352,13 +359,7 @@ class LauncherActivity : AppCompatActivity() {
         val info = widgetRepository.getProviderInfo(widgetId) ?: return
         val hostView = widgetRepository.createView(widgetId)
         setupWidgetView(hostView, info)
-        val density = resources.displayMetrics.density
-        val heightPx = if (info.minHeight > 0) {
-            (info.minHeight * density).toInt()
-        } else {
-            (200 * density).toInt()
-        }
-        widgetPage.addWidgetView(hostView, widgetId, heightPx)
+        widgetPage.addWidgetView(hostView, widgetId, widgetHeightPx(widgetId, info))
         widgetRepository.pendingWidgetId = -1
     }
 
@@ -370,36 +371,53 @@ class LauncherActivity : AppCompatActivity() {
         hostView.updateAppWidgetSize(null, widthDp, heightDp, widthDp, heightDp)
     }
 
+    private fun widgetHeightPx(widgetId: Int, info: android.appwidget.AppWidgetProviderInfo): Int {
+        val density = resources.displayMetrics.density
+        val savedDp = widgetRepository.getWidgetHeightDp(widgetId)
+        if (savedDp > 0) return (savedDp * density).toInt()
+        return if (info.minHeight > 0) (info.minHeight * density).toInt()
+        else (200 * density).toInt()
+    }
+
     private fun restoreSavedWidgets() {
         val ids = widgetRepository.getSavedWidgetIds()
         Log.d("NHWidget", "Restoring ${ids.size} widgets: $ids")
         widgetPage.clearWidgets()
-        val density = resources.displayMetrics.density
         for (id in ids) {
             val info = widgetRepository.getProviderInfo(id)
             if (info != null) {
                 val hostView = widgetRepository.createView(id)
                 setupWidgetView(hostView, info)
-                val heightPx = if (info.minHeight > 0) {
-                    (info.minHeight * density).toInt()
-                } else {
-                    (200 * density).toInt()
-                }
-                widgetPage.addWidgetView(hostView, id, heightPx)
+                widgetPage.addWidgetView(hostView, id, widgetHeightPx(id, info))
             } else {
                 widgetRepository.removeWidgetId(id)
             }
         }
     }
 
-    private fun confirmRemoveWidget(widgetId: Int) {
+    private fun showWidgetMenu(widgetId: Int) {
+        val items = arrayOf("Remove", "Small", "Medium", "Large", "Extra large")
         AlertDialog.Builder(this)
-            .setMessage("Remove this widget?")
-            .setPositiveButton("Remove") { _, _ ->
-                widgetPage.removeWidgetView(widgetId)
-                widgetRepository.removeWidgetId(widgetId)
+            .setItems(items) { _, which ->
+                when (which) {
+                    0 -> {
+                        widgetPage.removeWidgetView(widgetId)
+                        widgetRepository.removeWidgetId(widgetId)
+                        widgetRepository.removeWidgetHeight(widgetId)
+                    }
+                    else -> {
+                        val heightDp = when (which) {
+                            1 -> 100
+                            2 -> 200
+                            3 -> 300
+                            else -> 400
+                        }
+                        val heightPx = (heightDp * resources.displayMetrics.density).toInt()
+                        widgetRepository.setWidgetHeightDp(widgetId, heightDp)
+                        widgetPage.updateWidgetHeight(widgetId, heightPx)
+                    }
+                }
             }
-            .setNegativeButton("Cancel", null)
             .show()
     }
 

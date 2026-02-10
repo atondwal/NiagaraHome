@@ -4,7 +4,6 @@ import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
 import android.content.Context
-import android.widget.RemoteViews
 
 class WidgetRepository(private val context: Context) {
 
@@ -59,5 +58,17 @@ class WidgetRepository(private val context: Context) {
 
     fun stopListening() {
         appWidgetHost.stopListening()
+    }
+
+    fun getWidgetHeightDp(widgetId: Int): Int {
+        return prefs.getInt("widget_height_$widgetId", 0)
+    }
+
+    fun setWidgetHeightDp(widgetId: Int, heightDp: Int) {
+        prefs.edit().putInt("widget_height_$widgetId", heightDp).apply()
+    }
+
+    fun removeWidgetHeight(widgetId: Int) {
+        prefs.edit().remove("widget_height_$widgetId").apply()
     }
 }
