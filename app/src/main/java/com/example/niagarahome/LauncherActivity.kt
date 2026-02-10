@@ -83,6 +83,10 @@ class LauncherActivity : AppCompatActivity() {
                 onSearchQueryChanged()
             }
         })
+        hiddenInput.setOnEditorActionListener { _, _, _ ->
+            launchFirstMatch()
+            true
+        }
 
         searchButton = findViewById(R.id.search_button)
         searchButton.setOnClickListener { showKeyboard() }
@@ -280,6 +284,11 @@ class LauncherActivity : AppCompatActivity() {
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         startActivity(Intent(this, SettingsActivity::class.java))
+    }
+
+    private fun launchFirstMatch() {
+        val first = adapter.currentList.firstOrNull { it is ListItem.AppItem } as? ListItem.AppItem
+        if (first != null) launchApp(first.appInfo)
     }
 
     private fun launchApp(app: AppInfo) {

@@ -60,7 +60,7 @@
         android:focusableInTouchMode="true"
         android:importantForAutofill="no"
         android:inputType="text|textNoSuggestions"
-        android:imeOptions="flagNoExtractUi|flagNoFullscreen"
+        android:imeOptions="actionGo|flagNoExtractUi|flagNoFullscreen"
         android:maxLines="1" />
 
     <TextView
