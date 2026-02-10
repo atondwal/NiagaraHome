@@ -1,6 +1,7 @@
 package com.example.niagarahome
 
 import android.appwidget.AppWidgetHost
+import android.appwidget.AppWidgetHostView
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
 import android.content.Context
@@ -14,7 +15,11 @@ class WidgetRepository(private val context: Context) {
         private const val KEY_PENDING_WIDGET_ID = "pending_widget_id"
     }
 
-    val appWidgetHost = AppWidgetHost(context, HOST_ID)
+    val appWidgetHost = object : AppWidgetHost(context, HOST_ID) {
+        override fun onCreateView(
+            ctx: Context, appWidgetId: Int, appWidget: AppWidgetProviderInfo?
+        ): AppWidgetHostView = NHWidgetHostView(ctx)
+    }
     val appWidgetManager: AppWidgetManager = AppWidgetManager.getInstance(context)
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
@@ -39,9 +44,9 @@ class WidgetRepository(private val context: Context) {
 
     fun allocateWidgetId(): Int = appWidgetHost.allocateAppWidgetId()
 
-    fun createView(widgetId: Int): android.appwidget.AppWidgetHostView {
+    fun createView(widgetId: Int): NHWidgetHostView {
         val info = appWidgetManager.getAppWidgetInfo(widgetId)
-        return appWidgetHost.createView(context, widgetId, info)
+        return appWidgetHost.createView(context, widgetId, info) as NHWidgetHostView
     }
 
     fun getProviderInfo(widgetId: Int): AppWidgetProviderInfo? {

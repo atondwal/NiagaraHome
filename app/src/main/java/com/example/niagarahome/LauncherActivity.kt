@@ -19,7 +19,6 @@ import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.PopupMenu
 import androidx.core.content.pm.ShortcutInfoCompat
@@ -107,7 +106,15 @@ class LauncherActivity : AppCompatActivity() {
         }
 
         widgetPage.onAddWidgetClick = { startWidgetPicker() }
-        widgetPage.onWidgetLongPress = { widgetId -> showWidgetMenu(widgetId) }
+        widgetPage.onWidgetRemove = { widgetId ->
+            widgetPage.removeWidgetView(widgetId)
+            widgetRepository.removeWidgetId(widgetId)
+            widgetRepository.removeWidgetHeight(widgetId)
+        }
+        widgetPage.onWidgetResized = { widgetId, heightPx ->
+            val heightDp = (heightPx / resources.displayMetrics.density).toInt()
+            widgetRepository.setWidgetHeightDp(widgetId, heightDp)
+        }
 
         hiddenInput = findViewById(R.id.hidden_input)
         hiddenInput.addTextChangedListener(object : TextWatcher {
@@ -363,7 +370,7 @@ class LauncherActivity : AppCompatActivity() {
         widgetRepository.pendingWidgetId = -1
     }
 
-    private fun setupWidgetView(hostView: android.appwidget.AppWidgetHostView, info: android.appwidget.AppWidgetProviderInfo) {
+    private fun setupWidgetView(hostView: NHWidgetHostView, info: android.appwidget.AppWidgetProviderInfo) {
         val density = resources.displayMetrics.density
         // Calculate width in dp (full screen minus padding)
         val widthDp = ((resources.displayMetrics.widthPixels - (32 * density).toInt()) / density).toInt()
@@ -395,31 +402,6 @@ class LauncherActivity : AppCompatActivity() {
         }
     }
 
-    private fun showWidgetMenu(widgetId: Int) {
-        val items = arrayOf("Remove", "Small", "Medium", "Large", "Extra large")
-        AlertDialog.Builder(this)
-            .setItems(items) { _, which ->
-                when (which) {
-                    0 -> {
-                        widgetPage.removeWidgetView(widgetId)
-                        widgetRepository.removeWidgetId(widgetId)
-                        widgetRepository.removeWidgetHeight(widgetId)
-                    }
-                    else -> {
-                        val heightDp = when (which) {
-                            1 -> 100
-                            2 -> 200
-                            3 -> 300
-                            else -> 400
-                        }
-                        val heightPx = (heightDp * resources.displayMetrics.density).toInt()
-                        widgetRepository.setWidgetHeightDp(widgetId, heightDp)
-                        widgetPage.updateWidgetHeight(widgetId, heightPx)
-                    }
-                }
-            }
-            .show()
-    }
 
     // --- Settings ---
 
