@@ -35,7 +35,7 @@ class AppRepository(private val context: Context) {
         launcherApps.unregisterCallback(callback)
     }
 
-    private fun reload() {
+    fun reload() {
         val allApps = mutableListOf<AppInfo>()
         for (profile in userManager.userProfiles) {
             val activities = launcherApps.getActivityList(null, profile)
@@ -50,6 +50,8 @@ class AppRepository(private val context: Context) {
                 )
             }
         }
+        val hidden = Settings.hiddenApps
+        allApps.removeAll { it.packageName in hidden }
         allApps.sortWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.label })
 
         val positions = mutableMapOf<Char, Int>()

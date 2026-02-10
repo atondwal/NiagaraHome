@@ -70,6 +70,26 @@ object Settings {
         get() = prefs.getInt("strip_v_padding", DEF_STRIP_V_PADDING)
         set(v) = prefs.edit().putInt("strip_v_padding", v).apply()
 
+    // --- Hidden Apps ---
+    val hiddenApps: Set<String>
+        get() = prefs.getStringSet("hidden_apps", emptySet()) ?: emptySet()
+
+    fun addHiddenApp(packageName: String) {
+        val current = hiddenApps.toMutableSet()
+        current.add(packageName)
+        prefs.edit().putStringSet("hidden_apps", current).apply()
+    }
+
+    fun removeHiddenApp(packageName: String) {
+        val current = hiddenApps.toMutableSet()
+        current.remove(packageName)
+        prefs.edit().putStringSet("hidden_apps", current).apply()
+    }
+
+    fun clearHiddenApps() {
+        prefs.edit().remove("hidden_apps").apply()
+    }
+
     // --- Gesture ---
     var pullDownThresholdDp: Int
         get() = prefs.getInt("pull_down_threshold", DEF_PULL_DOWN_THRESHOLD)

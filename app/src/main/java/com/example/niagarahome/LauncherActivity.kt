@@ -4,13 +4,21 @@ import android.annotation.SuppressLint
 import android.content.ComponentName
 import android.content.Intent
 import android.content.res.Configuration
+import android.graphics.drawable.BitmapDrawable
+import android.net.Uri
 import android.os.Bundle
 import android.view.MotionEvent
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.PopupMenu
+import androidx.core.content.pm.ShortcutInfoCompat
+import androidx.core.content.pm.ShortcutManagerCompat
+import androidx.core.graphics.drawable.IconCompat
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.LinearSmoothScroller
 import androidx.recyclerview.widget.RecyclerView
@@ -20,7 +28,7 @@ class LauncherActivity : AppCompatActivity() {
 
     private lateinit var repository: AppRepository
     private lateinit var adapter: AppListAdapter
-    private lateinit var layoutManager: LinearLayoutManager
+    private lateinit var layoutManager: RecyclerView.LayoutManager
     private lateinit var recyclerView: RecyclerView
     private lateinit var alphabetStrip: AlphabetStripView
     private lateinit var foldableHelper: FoldableHelper
@@ -39,11 +47,14 @@ class LauncherActivity : AppCompatActivity() {
 
         repository = AppRepository(this)
 
-        adapter = AppListAdapter { app -> launchApp(app) }
-        layoutManager = LinearLayoutManager(this)
+        adapter = AppListAdapter(
+            onClick = { app -> launchApp(app) },
+            onLongClick = { app, view -> showAppContextMenu(app, view) }
+        )
 
         rootLayout = findViewById(R.id.root_layout)
         recyclerView = findViewById(R.id.app_list)
+        layoutManager = createLayoutManager(FoldState.UNKNOWN)
         recyclerView.layoutManager = layoutManager
         recyclerView.adapter = adapter
 
@@ -95,8 +106,12 @@ class LauncherActivity : AppCompatActivity() {
         foldableHelper.observe(lifecycle, lifecycleScope)
 
         lifecycleScope.launch {
-            foldableHelper.foldState.collect { _ ->
-                // Compact mode is handled by resource qualifiers (values vs values-sw600dp)
+            foldableHelper.foldState.collect { state ->
+                val newManager = createLayoutManager(state)
+                if (newManager::class != layoutManager::class) {
+                    layoutManager = newManager
+                    recyclerView.layoutManager = layoutManager
+                }
             }
         }
     }
@@ -153,13 +168,37 @@ class LauncherActivity : AppCompatActivity() {
         adapter.notifyDataSetChanged()
     }
 
+    private fun createLayoutManager(state: FoldState): RecyclerView.LayoutManager {
+        return if (state == FoldState.MAIN_SCREEN) {
+            GridLayoutManager(this, 2).apply {
+                spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+                    override fun getSpanSize(position: Int): Int {
+                        return if (adapter.getItemViewType(position) == AppListAdapter.VIEW_TYPE_HEADER) 2 else 1
+                    }
+                }
+            }
+        } else {
+            LinearLayoutManager(this)
+        }
+    }
+
     private fun smoothScrollTo(position: Int) {
-        val firstVisible = layoutManager.findFirstVisibleItemPosition()
+        val lm = layoutManager
+        val firstVisible = when (lm) {
+            is LinearLayoutManager -> lm.findFirstVisibleItemPosition()
+            is GridLayoutManager -> lm.findFirstVisibleItemPosition()
+            else -> 0
+        }
         val distance = kotlin.math.abs(position - firstVisible)
 
         if (distance > 20) {
             val snapTo = if (position > firstVisible) position - 5 else position + 5
-            layoutManager.scrollToPositionWithOffset(snapTo.coerceIn(0, adapter.itemCount - 1), 0)
+            val safePos = snapTo.coerceIn(0, adapter.itemCount - 1)
+            when (lm) {
+                is LinearLayoutManager -> lm.scrollToPositionWithOffset(safePos, 0)
+                is GridLayoutManager -> lm.scrollToPositionWithOffset(safePos, 0)
+                else -> recyclerView.scrollToPosition(safePos)
+            }
         }
 
         val speed = scrollSpeedFactor
@@ -239,5 +278,85 @@ class LauncherActivity : AppCompatActivity() {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
         }
         startActivity(intent)
+    }
+
+    private fun showAppContextMenu(app: AppInfo, anchor: View) {
+        val popup = PopupMenu(this, anchor)
+        popup.menu.add(0, 1, 0, "App Info")
+        popup.menu.add(0, 2, 1, "Uninstall")
+        popup.menu.add(0, 3, 2, "Hide")
+        popup.menu.add(0, 4, 3, "Create Shortcut")
+
+        popup.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                1 -> {
+                    val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.parse("package:${app.packageName}")
+                    }
+                    startActivity(intent)
+                    true
+                }
+                2 -> {
+                    try {
+                        val uri = Uri.fromParts("package", app.packageName, null)
+                        val intent = Intent(Intent.ACTION_DELETE, uri).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                                    Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
+                        }
+                        startActivity(intent)
+                    } catch (e: Exception) {
+                        Toast.makeText(this, "Uninstall failed: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                    true
+                }
+                3 -> {
+                    Settings.addHiddenApp(app.packageName)
+                    repository.reload()
+                    Toast.makeText(this, "${app.label} hidden", Toast.LENGTH_SHORT).show()
+                    true
+                }
+                4 -> {
+                    createShortcut(app)
+                    true
+                }
+                else -> false
+            }
+        }
+        popup.show()
+    }
+
+    private fun createShortcut(app: AppInfo) {
+        val launchIntent = Intent(Intent.ACTION_MAIN).apply {
+            addCategory(Intent.CATEGORY_LAUNCHER)
+            component = ComponentName(app.packageName, app.activityName)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
+        }
+
+        val drawable = app.icon
+        val bitmap = if (drawable is BitmapDrawable) {
+            drawable.bitmap
+        } else {
+            val bmp = android.graphics.Bitmap.createBitmap(
+                drawable.intrinsicWidth.coerceAtLeast(1),
+                drawable.intrinsicHeight.coerceAtLeast(1),
+                android.graphics.Bitmap.Config.ARGB_8888
+            )
+            val canvas = android.graphics.Canvas(bmp)
+            drawable.setBounds(0, 0, canvas.width, canvas.height)
+            drawable.draw(canvas)
+            bmp
+        }
+
+        val shortcutInfo = ShortcutInfoCompat.Builder(this, "${app.packageName}_${app.activityName}")
+            .setShortLabel(app.label)
+            .setIcon(IconCompat.createWithBitmap(bitmap))
+            .setIntent(launchIntent)
+            .build()
+
+        if (ShortcutManagerCompat.isRequestPinShortcutSupported(this)) {
+            ShortcutManagerCompat.requestPinShortcut(this, shortcutInfo, null)
+        } else {
+            Toast.makeText(this, "Shortcuts not supported by launcher", Toast.LENGTH_SHORT).show()
+        }
     }
 }

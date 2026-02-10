@@ -83,6 +83,37 @@ class SettingsActivity : AppCompatActivity() {
         addIntSlider("Pull-Down Threshold", 40f, 200f, 5f, Settings.pullDownThresholdDp, "dp")
             { Settings.pullDownThresholdDp = it }
 
+        // --- Hidden Apps ---
+        addHeader("Hidden Apps")
+        container.addView(MaterialButton(this).apply {
+            text = "Unhide All Apps"
+            setTextColor(Color.WHITE)
+            setBackgroundColor(Color.argb(40, 255, 255, 255))
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            lp.topMargin = dp(8)
+            layoutParams = lp
+            setOnClickListener {
+                val count = Settings.hiddenApps.size
+                if (count > 0) {
+                    Settings.clearHiddenApps()
+                    android.widget.Toast.makeText(
+                        this@SettingsActivity,
+                        "$count app(s) unhidden",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    android.widget.Toast.makeText(
+                        this@SettingsActivity,
+                        "No hidden apps",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        })
+
         // Reset button
         container.addView(MaterialButton(this).apply {
             text = "Reset to Defaults"

@@ -18,7 +18,8 @@ sealed class ListItem {
 }
 
 class AppListAdapter(
-    private val onClick: (AppInfo) -> Unit
+    private val onClick: (AppInfo) -> Unit,
+    private val onLongClick: (AppInfo, View) -> Unit
 ) : ListAdapter<ListItem, RecyclerView.ViewHolder>(DIFF) {
 
     private var lastAnimatedPosition = -1
@@ -71,6 +72,10 @@ class AppListAdapter(
                 h.icon.setImageDrawable(app.icon)
                 h.name.text = app.label
                 h.itemView.setOnClickListener { onClick(app) }
+                h.itemView.setOnLongClickListener { view ->
+                    onLongClick(app, view)
+                    true
+                }
 
                 // Apply dynamic padding and margin
                 if (itemHorizontalPaddingPx > 0 || itemVerticalPaddingPx > 0) {
