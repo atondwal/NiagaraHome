@@ -70,6 +70,8 @@ class LauncherActivity : AppCompatActivity() {
     private var pullDownStartY = 0f
     private var pullDownTracking = false
     private var pullDownThresholdPx = 0f
+    private var swipeUpStartY = 0f
+    private var swipeUpTracking = false
     private var settingsApplied = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -482,9 +484,10 @@ class LauncherActivity : AppCompatActivity() {
         recyclerView.scrollBy(0, targetScroll - currentScroll)
     }
 
-    // Intercept ALL touches for pull-down and outside-tap detection
+    // Intercept ALL touches for pull-down, swipe-up, and outside-tap detection
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
         if (handlePullDown(event)) return true
+        if (handleSwipeUp(event)) return true
         // Tap outside app list dismisses it
         if (event.action == MotionEvent.ACTION_DOWN && appListVisible) {
             val x = event.rawX
@@ -523,6 +526,32 @@ class LauncherActivity : AppCompatActivity() {
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 pullDownTracking = false
+            }
+        }
+        return false
+    }
+
+    private fun handleSwipeUp(event: MotionEvent): Boolean {
+        // Swipe up on widget page opens app list + keyboard for search
+        if (appListVisible) return false
+        when (event.action) {
+            MotionEvent.ACTION_DOWN -> {
+                swipeUpStartY = event.rawY
+                swipeUpTracking = true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (swipeUpTracking) {
+                    val deltaY = swipeUpStartY - event.rawY
+                    if (deltaY > pullDownThresholdPx) {
+                        swipeUpTracking = false
+                        showAppList()
+                        showKeyboard()
+                        return true
+                    }
+                }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                swipeUpTracking = false
             }
         }
         return false
