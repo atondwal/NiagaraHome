@@ -85,11 +85,6 @@ class AppListAdapter(
             is ListItem.AppItem -> {
                 val app = item.appInfo
                 val h = holder as AppViewHolder
-                h.itemView.animate().cancel()
-                h.itemView.alpha = 1f
-                h.itemView.translationY = 0f
-                h.itemView.scaleX = 1f
-                h.itemView.scaleY = 1f
                 h.icon.setImageDrawable(app.icon)
                 h.name.text = app.label
                 h.itemView.setOnClickListener { onClick(app) }
@@ -142,6 +137,14 @@ class AppListAdapter(
                 }
             }
         }
+    }
+
+    override fun onViewRecycled(holder: RecyclerView.ViewHolder) {
+        holder.itemView.animate().cancel()
+        holder.itemView.alpha = 1f
+        holder.itemView.translationY = 0f
+        holder.itemView.scaleX = 1f
+        holder.itemView.scaleY = 1f
     }
 
     fun resetAnimations() {
