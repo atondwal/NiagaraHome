@@ -13,6 +13,8 @@ class WidgetRepository(private val context: Context) {
         private const val PREFS_NAME = "widget_prefs"
         private const val KEY_WIDGET_IDS = "widget_ids"
         private const val KEY_PENDING_WIDGET_ID = "pending_widget_id"
+        private const val KEY_PENDING_SCREEN = "pending_screen"
+        private const val KEY_MIGRATED_PER_SCREEN = "migrated_per_screen"
     }
 
     val appWidgetHost = object : AppWidgetHost(context, HOST_ID) {
@@ -23,23 +25,37 @@ class WidgetRepository(private val context: Context) {
     val appWidgetManager: AppWidgetManager = AppWidgetManager.getInstance(context)
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    fun getSavedWidgetIds(): List<Int> {
-        val raw = prefs.getString(KEY_WIDGET_IDS, "") ?: ""
+    fun getSavedWidgetIds(screen: String): List<Int> {
+        val raw = prefs.getString("${KEY_WIDGET_IDS}_$screen", "") ?: ""
         if (raw.isBlank()) return emptyList()
         return raw.split(",").mapNotNull { it.trim().toIntOrNull() }
     }
 
-    fun addWidgetId(id: Int) {
-        val ids = getSavedWidgetIds().toMutableList()
+    fun addWidgetId(id: Int, screen: String) {
+        val ids = getSavedWidgetIds(screen).toMutableList()
         if (id !in ids) ids.add(id)
-        prefs.edit().putString(KEY_WIDGET_IDS, ids.joinToString(",")).apply()
+        prefs.edit().putString("${KEY_WIDGET_IDS}_$screen", ids.joinToString(",")).apply()
     }
 
-    fun removeWidgetId(id: Int) {
-        val ids = getSavedWidgetIds().toMutableList()
+    fun removeWidgetId(id: Int, screen: String) {
+        val ids = getSavedWidgetIds(screen).toMutableList()
         ids.remove(id)
-        prefs.edit().putString(KEY_WIDGET_IDS, ids.joinToString(",")).apply()
+        prefs.edit().putString("${KEY_WIDGET_IDS}_$screen", ids.joinToString(",")).apply()
         appWidgetHost.deleteAppWidgetId(id)
+    }
+
+    fun migratePerScreen(currentScreen: String) {
+        if (prefs.getBoolean(KEY_MIGRATED_PER_SCREEN, false)) return
+        val legacy = prefs.getString(KEY_WIDGET_IDS, "") ?: ""
+        if (legacy.isNotBlank()) {
+            prefs.edit()
+                .putString("${KEY_WIDGET_IDS}_$currentScreen", legacy)
+                .remove(KEY_WIDGET_IDS)
+                .putBoolean(KEY_MIGRATED_PER_SCREEN, true)
+                .apply()
+        } else {
+            prefs.edit().putBoolean(KEY_MIGRATED_PER_SCREEN, true).apply()
+        }
     }
 
     fun allocateWidgetId(): Int = appWidgetHost.allocateAppWidgetId()
@@ -56,6 +72,10 @@ class WidgetRepository(private val context: Context) {
     var pendingWidgetId: Int
         get() = prefs.getInt(KEY_PENDING_WIDGET_ID, -1)
         set(value) = prefs.edit().putInt(KEY_PENDING_WIDGET_ID, value).apply()
+
+    var pendingScreen: String?
+        get() = prefs.getString(KEY_PENDING_SCREEN, null)
+        set(value) = prefs.edit().putString(KEY_PENDING_SCREEN, value).apply()
 
     fun startListening() {
         appWidgetHost.startListening()

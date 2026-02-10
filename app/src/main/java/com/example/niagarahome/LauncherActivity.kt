@@ -49,6 +49,9 @@ class LauncherActivity : AppCompatActivity() {
     private lateinit var appPage: FrameLayout
     private lateinit var widgetRepository: WidgetRepository
 
+    // Per-screen widget tracking
+    private var currentScreenKey = "cover"
+
     // App list visibility
     private var appListVisible = false
 
@@ -110,7 +113,7 @@ class LauncherActivity : AppCompatActivity() {
         widgetPage.onAddWidgetClick = { startWidgetPicker() }
         widgetPage.onWidgetRemove = { widgetId ->
             widgetPage.removeWidgetView(widgetId)
-            widgetRepository.removeWidgetId(widgetId)
+            widgetRepository.removeWidgetId(widgetId, currentScreenKey)
             widgetRepository.removeWidgetHeight(widgetId)
             widgetRepository.removeWidgetWidth(widgetId)
         }
@@ -188,12 +191,25 @@ class LauncherActivity : AppCompatActivity() {
         foldableHelper = FoldableHelper(this)
         foldableHelper.observe(lifecycle, lifecycleScope)
 
+        // Set initial screen key based on current screen width
+        val screenWidthDp = resources.displayMetrics.widthPixels / resources.displayMetrics.density
+        currentScreenKey = if (screenWidthDp >= 580f) "main" else "cover"
+
         lifecycleScope.launch {
             foldableHelper.foldState.collect { state ->
                 val newManager = createLayoutManager(state)
                 if (newManager::class != layoutManager::class) {
                     layoutManager = newManager
                     recyclerView.layoutManager = layoutManager
+                }
+                val newScreen = when (state) {
+                    FoldState.MAIN_SCREEN -> "main"
+                    FoldState.COVER_SCREEN -> "cover"
+                    FoldState.UNKNOWN -> null
+                }
+                if (newScreen != null && newScreen != currentScreenKey) {
+                    currentScreenKey = newScreen
+                    restoreSavedWidgets()
                 }
             }
         }
@@ -207,6 +223,7 @@ class LauncherActivity : AppCompatActivity() {
         settingsApplied = true
         clearSearch()
         hideAppList(animate = false)
+        widgetRepository.migratePerScreen(currentScreenKey)
         recoverPendingWidget()
         restoreSavedWidgets()
         recyclerView.requestFocus()
@@ -265,7 +282,8 @@ class LauncherActivity : AppCompatActivity() {
     private fun startWidgetPicker() {
         val id = widgetRepository.allocateWidgetId()
         widgetRepository.pendingWidgetId = id
-        Log.d("NHWidget", "startWidgetPicker pendingId=$id")
+        widgetRepository.pendingScreen = currentScreenKey
+        Log.d("NHWidget", "startWidgetPicker pendingId=$id screen=$currentScreenKey")
         val pickIntent = Intent(AppWidgetManager.ACTION_APPWIDGET_PICK).apply {
             putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
         }
@@ -292,6 +310,7 @@ class LauncherActivity : AppCompatActivity() {
         if (resultCode != Activity.RESULT_OK || data == null) {
             widgetRepository.appWidgetHost.deleteAppWidgetId(pending)
             widgetRepository.pendingWidgetId = -1
+            widgetRepository.pendingScreen = null
             return
         }
         val widgetId = data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, pending)
@@ -302,6 +321,7 @@ class LauncherActivity : AppCompatActivity() {
         if (info == null) {
             widgetRepository.appWidgetHost.deleteAppWidgetId(widgetId)
             widgetRepository.pendingWidgetId = -1
+            widgetRepository.pendingScreen = null
             return
         }
 
@@ -317,12 +337,14 @@ class LauncherActivity : AppCompatActivity() {
         if (resultCode != Activity.RESULT_OK) {
             widgetRepository.appWidgetHost.deleteAppWidgetId(pending)
             widgetRepository.pendingWidgetId = -1
+            widgetRepository.pendingScreen = null
             return
         }
         val info = widgetRepository.getProviderInfo(pending)
         if (info == null) {
             widgetRepository.appWidgetHost.deleteAppWidgetId(pending)
             widgetRepository.pendingWidgetId = -1
+            widgetRepository.pendingScreen = null
             return
         }
         proceedAfterBind(pending, info)
@@ -349,6 +371,7 @@ class LauncherActivity : AppCompatActivity() {
         if (resultCode != Activity.RESULT_OK) {
             widgetRepository.appWidgetHost.deleteAppWidgetId(pending)
             widgetRepository.pendingWidgetId = -1
+            widgetRepository.pendingScreen = null
             return
         }
         finishAddWidget(pending)
@@ -360,9 +383,11 @@ class LauncherActivity : AppCompatActivity() {
     private fun recoverPendingWidget() {
         val pending = widgetRepository.pendingWidgetId
         if (pending == -1) return
+        val screen = widgetRepository.pendingScreen ?: currentScreenKey
         // Already saved (onActivityResult handled it before we got here)
-        if (pending in widgetRepository.getSavedWidgetIds()) {
+        if (pending in widgetRepository.getSavedWidgetIds(screen)) {
             widgetRepository.pendingWidgetId = -1
+            widgetRepository.pendingScreen = null
             return
         }
         val info = widgetRepository.getProviderInfo(pending)
@@ -370,21 +395,24 @@ class LauncherActivity : AppCompatActivity() {
             Log.d("NHWidget", "Cleaning up unbound pending widget $pending")
             widgetRepository.appWidgetHost.deleteAppWidgetId(pending)
         } else {
-            Log.d("NHWidget", "Recovering pending widget $pending")
-            widgetRepository.addWidgetId(pending)
+            Log.d("NHWidget", "Recovering pending widget $pending screen=$screen")
+            widgetRepository.addWidgetId(pending, screen)
         }
         widgetRepository.pendingWidgetId = -1
+        widgetRepository.pendingScreen = null
     }
 
     private fun finishAddWidget(widgetId: Int) {
-        Log.d("NHWidget", "finishAddWidget($widgetId)")
-        widgetRepository.addWidgetId(widgetId)
+        val screen = widgetRepository.pendingScreen ?: currentScreenKey
+        Log.d("NHWidget", "finishAddWidget($widgetId) screen=$screen")
+        widgetRepository.addWidgetId(widgetId, screen)
         val info = widgetRepository.getProviderInfo(widgetId) ?: return
         val hostView = widgetRepository.createView(widgetId)
         setupWidgetView(hostView, info)
         val (w, h) = widgetSizePx(widgetId, info)
         widgetPage.addWidgetView(hostView, widgetId, w, h)
         widgetRepository.pendingWidgetId = -1
+        widgetRepository.pendingScreen = null
     }
 
     private fun setupWidgetView(hostView: NHWidgetHostView, info: android.appwidget.AppWidgetProviderInfo) {
@@ -407,8 +435,8 @@ class LauncherActivity : AppCompatActivity() {
     }
 
     private fun restoreSavedWidgets() {
-        val ids = widgetRepository.getSavedWidgetIds()
-        Log.d("NHWidget", "Restoring ${ids.size} widgets: $ids")
+        val ids = widgetRepository.getSavedWidgetIds(currentScreenKey)
+        Log.d("NHWidget", "Restoring ${ids.size} widgets for $currentScreenKey: $ids")
         widgetPage.clearWidgets()
         for (id in ids) {
             val info = widgetRepository.getProviderInfo(id)
@@ -418,7 +446,7 @@ class LauncherActivity : AppCompatActivity() {
                 val (w, h) = widgetSizePx(id, info)
                 widgetPage.addWidgetView(hostView, id, w, h)
             } else {
-                widgetRepository.removeWidgetId(id)
+                widgetRepository.removeWidgetId(id, currentScreenKey)
             }
         }
     }
