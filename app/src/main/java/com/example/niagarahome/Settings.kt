@@ -50,14 +50,6 @@ object Settings {
         set(v) = prefs.edit().putInt("enter_anim_duration", v).apply()
 
     // --- Alphabet Strip ---
-    var pillOpacityPercent: Int
-        get() = prefs.getInt("pill_opacity", DEF_PILL_OPACITY)
-        set(v) = prefs.edit().putInt("pill_opacity", v).apply()
-
-    var pillCornerRadiusDp: Int
-        get() = prefs.getInt("pill_corner_radius", DEF_PILL_CORNER_RADIUS)
-        set(v) = prefs.edit().putInt("pill_corner_radius", v).apply()
-
     var highlightScale: Float
         get() = prefs.getFloat("highlight_scale", DEF_HIGHLIGHT_SCALE)
         set(v) = prefs.edit().putFloat("highlight_scale", v).apply()
@@ -69,6 +61,14 @@ object Settings {
     var stripEndMarginDp: Int
         get() = prefs.getInt("strip_end_margin", DEF_STRIP_END_MARGIN)
         set(v) = prefs.edit().putInt("strip_end_margin", v).apply()
+
+    var stripTopMarginDp: Int
+        get() = prefs.getInt("strip_top_margin", DEF_STRIP_TOP_MARGIN)
+        set(v) = prefs.edit().putInt("strip_top_margin", v).apply()
+
+    var stripBottomMarginDp: Int
+        get() = prefs.getInt("strip_bottom_margin", DEF_STRIP_BOTTOM_MARGIN)
+        set(v) = prefs.edit().putInt("strip_bottom_margin", v).apply()
 
     var fineScrollThresholdDp: Int
         get() = prefs.getInt("fine_scroll_threshold", DEF_FINE_SCROLL_THRESHOLD)
@@ -102,6 +102,10 @@ object Settings {
         prefs.edit().remove("hidden_apps").apply()
     }
 
+    var pillTouchMarginDp: Int
+        get() = prefs.getInt("pill_touch_margin", DEF_PILL_TOUCH_MARGIN)
+        set(v) = prefs.edit().putInt("pill_touch_margin", v).apply()
+
     // --- Gesture ---
     var pullDownThresholdDp: Int
         get() = prefs.getInt("pull_down_threshold", DEF_PULL_DOWN_THRESHOLD)
@@ -121,13 +125,14 @@ object Settings {
     const val DEF_PRESS_SCALE = 0.97f
     const val DEF_ENTER_ANIM_SLIDE = 40
     const val DEF_ENTER_ANIM_DURATION = 250
-    const val DEF_PILL_OPACITY = 10
-    const val DEF_PILL_CORNER_RADIUS = 12
     const val DEF_HIGHLIGHT_SCALE = 1.4f
     const val DEF_STRIP_V_PADDING = 24
     const val DEF_STRIP_END_MARGIN = 4
+    const val DEF_STRIP_TOP_MARGIN = 96
+    const val DEF_STRIP_BOTTOM_MARGIN = 96
     const val DEF_FINE_SCROLL_THRESHOLD = 80
     const val DEF_BULGE_MARGIN = 24
     const val DEF_BULGE_RADIUS = 6
     const val DEF_PULL_DOWN_THRESHOLD = 100
+    const val DEF_PILL_TOUCH_MARGIN = 20
 }

@@ -135,26 +135,29 @@ class LauncherActivity : AppCompatActivity() {
     private fun applySettings(resetAnimations: Boolean = false) {
         val density = resources.displayMetrics.density
 
-        // Alphabet strip margin + width
+        // Alphabet strip margin + width (wider by touch margin for forgiving hits)
         val stripMargin = (Settings.stripEndMarginDp * density).toInt()
+        val touchMarginPx = (Settings.pillTouchMarginDp * density).toInt()
+        val visualWidth = (Settings.alphabetStripWidthDp * density).toInt()
         val stripLp = alphabetStrip.layoutParams as FrameLayout.LayoutParams
-        stripLp.width = (Settings.alphabetStripWidthDp * density).toInt()
+        stripLp.width = visualWidth + touchMarginPx
         stripLp.marginEnd = stripMargin
+        stripLp.topMargin = (Settings.stripTopMarginDp * density).toInt()
+        stripLp.bottomMargin = (Settings.stripBottomMarginDp * density).toInt()
         alphabetStrip.layoutParams = stripLp
+        alphabetStrip.touchMarginLeftPx = touchMarginPx.toFloat()
         val stripPad = (Settings.stripVerticalPaddingDp * density).toInt()
         alphabetStrip.setPadding(0, stripPad, 0, stripPad)
 
-        // RecyclerView padding
+        // RecyclerView padding (based on visual strip width, not touch area)
         recyclerView.setPadding(
             0,
             (Settings.listTopPaddingDp * density).toInt(),
-            (Settings.alphabetStripWidthDp * density + stripMargin).toInt(),
+            (visualWidth + stripMargin),
             (Settings.listBottomPaddingDp * density).toInt()
         )
 
         // Alphabet strip visual properties
-        alphabetStrip.pillOpacityPercent = Settings.pillOpacityPercent
-        alphabetStrip.pillCornerRadiusDp = Settings.pillCornerRadiusDp
         alphabetStrip.highlightScale = Settings.highlightScale
         alphabetStrip.fineThresholdPx = Settings.fineScrollThresholdDp * density
         alphabetStrip.bulgeMarginPx = Settings.bulgeMarginDp * density

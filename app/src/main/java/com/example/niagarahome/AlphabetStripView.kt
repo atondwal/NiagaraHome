@@ -4,7 +4,6 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
@@ -22,10 +21,6 @@ class AlphabetStripView @JvmOverloads constructor(
     var onFineScroll: ((Float) -> Unit)? = null  // 0.0 = top, 1.0 = bottom
 
     // Dynamic properties (set from Settings via applySettings)
-    var pillOpacityPercent: Int = Settings.DEF_PILL_OPACITY
-        set(value) { field = value; invalidate() }
-    var pillCornerRadiusDp: Int = Settings.DEF_PILL_CORNER_RADIUS
-        set(value) { field = value; invalidate() }
     var highlightScale: Float = Settings.DEF_HIGHLIGHT_SCALE
         set(value) { field = value; invalidate() }
 
@@ -43,6 +38,7 @@ class AlphabetStripView @JvmOverloads constructor(
     private var pullDistancePx = 0f  // actual pixel distance pulled
     var bulgeMarginPx = Settings.DEF_BULGE_MARGIN * resources.displayMetrics.density
     var bulgeRadius = Settings.DEF_BULGE_RADIUS.toFloat()
+    var touchMarginLeftPx = Settings.DEF_PILL_TOUCH_MARGIN * resources.displayMetrics.density
 
     private val density = resources.displayMetrics.density
 
@@ -55,9 +51,6 @@ class AlphabetStripView @JvmOverloads constructor(
         color = Color.WHITE
         textAlign = Paint.Align.CENTER
     }
-
-    private val pillPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val pillRect = RectF()
 
     private var baseFontSize = 12f
 
@@ -80,20 +73,8 @@ class AlphabetStripView @JvmOverloads constructor(
         super.onDraw(canvas)
         if (letters.isEmpty()) return
 
-        // Draw background pill
-        val alpha = (pillOpacityPercent * 255 / 100).coerceIn(0, 255)
-        pillPaint.color = Color.argb(alpha, 255, 255, 255)
-        val pillPadding = 4f * density
-        val cornerRadius = pillCornerRadiusDp * density
-        pillRect.set(
-            pillPadding,
-            paddingTop.toFloat(),
-            width - pillPadding,
-            height - paddingBottom.toFloat()
-        )
-        canvas.drawRoundRect(pillRect, cornerRadius, cornerRadius, pillPaint)
-
-        val centerX = width / 2f
+        val margin = touchMarginLeftPx
+        val centerX = margin + (width - margin) / 2f
         val totalHeight = height - paddingTop - paddingBottom
         val letterHeight = totalHeight.toFloat() / letters.size
 
@@ -160,8 +141,10 @@ class AlphabetStripView @JvmOverloads constructor(
         val totalHeight = height - paddingTop - paddingBottom
         val letterHeight = totalHeight.toFloat() / letters.size
 
-        // How far left the finger has pulled from the strip (x < 0 = pulling left)
-        val pullDistance = (-x).coerceAtLeast(0f)
+        // How far left the finger has pulled from the visual strip
+        // x is relative to view; the visual strip starts at touchMarginLeftPx
+        val adjustedX = x - touchMarginLeftPx
+        val pullDistance = (-adjustedX).coerceAtLeast(0f)
         val fineFraction = (pullDistance / fineThresholdPx).coerceIn(0f, 1f)
 
         // Update deformation state
