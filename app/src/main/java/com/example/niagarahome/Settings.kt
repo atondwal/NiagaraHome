@@ -82,6 +82,13 @@ object Settings {
         get() = prefs.getInt("bulge_radius", DEF_BULGE_RADIUS)
         set(v) = prefs.edit().putInt("bulge_radius", v).apply()
 
+    // --- Background ---
+    fun getBackgroundImagePath(screen: String): String? =
+        prefs.getString("background_image_path_$screen", null)
+
+    fun setBackgroundImagePath(screen: String, path: String?) =
+        prefs.edit().putString("background_image_path_$screen", path).apply()
+
     // --- Hidden Apps ---
     val hiddenApps: Set<String>
         get() = prefs.getStringSet("hidden_apps", emptySet()) ?: emptySet()

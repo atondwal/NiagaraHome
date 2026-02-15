@@ -217,6 +217,7 @@ class LauncherActivity : AppCompatActivity() {
                 if (newScreen != null && newScreen != currentScreenKey) {
                     currentScreenKey = newScreen
                     restoreSavedWidgets()
+                    loadBackground()
                 }
             }
         }
@@ -509,7 +510,7 @@ class LauncherActivity : AppCompatActivity() {
     }
 
     private fun loadBackground() {
-        val path = Settings.backgroundImagePath
+        val path = Settings.getBackgroundImagePath(currentScreenKey)
         if (path != null && java.io.File(path).exists()) {
             val bmp = BitmapFactory.decodeFile(path)
             if (bmp != null) {

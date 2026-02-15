@@ -8,6 +8,13 @@
     android:clipToPadding="false"
     android:fitsSystemWindows="true">
 
+    <ImageView
+        android:id="@+id/background_image"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:visibility="gone" />
+
     <!-- Widget page: always visible behind app list -->
     <com.example.niagarahome.WidgetPageView
         android:id="@+id/widget_page"

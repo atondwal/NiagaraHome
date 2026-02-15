@@ -9,14 +9,27 @@ import android.view.Gravity
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.slider.LabelFormatter
 import com.google.android.material.slider.Slider
+import java.io.File
 
 class SettingsActivity : AppCompatActivity() {
 
     private lateinit var container: LinearLayout
+
+    private var pickScreen = "cover"
+
+    private val pickImage = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri == null) return@registerForActivityResult
+        val dest = File(filesDir, "background_$pickScreen.jpg")
+        contentResolver.openInputStream(uri)?.use { input ->
+            dest.outputStream().use { output -> input.copyTo(output) }
+        }
+        Settings.setBackgroundImagePath(pickScreen, dest.absolutePath)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -89,6 +102,45 @@ class SettingsActivity : AppCompatActivity() {
         addHeader("Gesture")
         addIntSlider("Pull-Down Threshold", 40f, 200f, 5f, Settings.pullDownThresholdDp, "dp")
             { Settings.pullDownThresholdDp = it }
+
+        // --- Background ---
+        addHeader("Background")
+        for (screen in listOf("cover", "main")) {
+            val label = if (screen == "cover") "Cover Screen" else "Main Screen"
+            container.addView(MaterialButton(this).apply {
+                text = "Set $label Background"
+                setTextColor(Color.WHITE)
+                setBackgroundColor(Color.argb(40, 255, 255, 255))
+                val lp = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+                lp.topMargin = dp(8)
+                layoutParams = lp
+                setOnClickListener {
+                    pickScreen = screen
+                    pickImage.launch("image/*")
+                }
+            })
+            container.addView(MaterialButton(this).apply {
+                text = "Clear $label Background"
+                setTextColor(Color.WHITE)
+                setBackgroundColor(Color.argb(40, 255, 255, 255))
+                val lp = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+                lp.topMargin = dp(4)
+                layoutParams = lp
+                setOnClickListener {
+                    val path = Settings.getBackgroundImagePath(screen)
+                    if (path != null) {
+                        File(path).delete()
+                        Settings.setBackgroundImagePath(screen, null)
+                    }
+                }
+            })
+        }
 
         // --- Hidden Apps ---
         addHeader("Hidden Apps")
