@@ -176,6 +176,9 @@ class WidgetPageView @JvmOverloads constructor(
         }
     }
 
+    fun canScrollUp() = scrollView.canScrollVertically(-1)
+    fun canScrollDown() = scrollView.canScrollVertically(1)
+
     fun isEditingWidget() = editingWrapper != null
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {

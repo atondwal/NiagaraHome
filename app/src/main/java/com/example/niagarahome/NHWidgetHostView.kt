@@ -6,6 +6,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.MotionEvent
+import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
 
@@ -44,6 +45,11 @@ class NHWidgetHostView(context: Context) : AppWidgetHostView(context) {
                     Log.d("NHWidget", "HostView long-press fired! performLongClick=$result longClickable=$isLongClickable")
                 }
                 handler.postDelayed(longPressRunnable!!, longPressTimeout)
+                // If the widget has scrollable content, prevent the parent
+                // ScrollView from intercepting vertical drags
+                if (hasScrollableDescendant(this)) {
+                    parent.requestDisallowInterceptTouchEvent(true)
+                }
             }
             MotionEvent.ACTION_MOVE -> {
                 val dx = ev.x - downX
@@ -54,6 +60,7 @@ class NHWidgetHostView(context: Context) : AppWidgetHostView(context) {
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 cancelPendingLongPress()
+                parent?.requestDisallowInterceptTouchEvent(false)
             }
         }
         return hasLongPressed
@@ -72,5 +79,15 @@ class NHWidgetHostView(context: Context) : AppWidgetHostView(context) {
     private fun cancelPendingLongPress() {
         longPressRunnable?.let { handler.removeCallbacks(it) }
         longPressRunnable = null
+    }
+
+    private fun hasScrollableDescendant(view: View): Boolean {
+        if (view.canScrollVertically(1) || view.canScrollVertically(-1)) return true
+        if (view is ViewGroup) {
+            for (i in 0 until view.childCount) {
+                if (hasScrollableDescendant(view.getChildAt(i))) return true
+            }
+        }
+        return false
     }
 }

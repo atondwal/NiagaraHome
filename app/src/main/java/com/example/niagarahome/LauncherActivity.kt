@@ -586,8 +586,11 @@ class LauncherActivity : AppCompatActivity() {
         if (appListVisible) return false
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
-                pullDownStartY = event.rawY
-                pullDownTracking = true
+                // Only start tracking if widget list is at the top
+                if (!widgetPage.canScrollUp()) {
+                    pullDownStartY = event.rawY
+                    pullDownTracking = true
+                }
             }
             MotionEvent.ACTION_MOVE -> {
                 if (pullDownTracking) {
@@ -611,8 +614,11 @@ class LauncherActivity : AppCompatActivity() {
         if (appListVisible) return false
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
-                swipeUpStartY = event.rawY
-                swipeUpTracking = true
+                // Only start tracking if widget list is at the bottom
+                if (!widgetPage.canScrollDown()) {
+                    swipeUpStartY = event.rawY
+                    swipeUpTracking = true
+                }
             }
             MotionEvent.ACTION_MOVE -> {
                 if (swipeUpTracking) {
