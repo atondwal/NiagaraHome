@@ -7,6 +7,7 @@ import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Intent
 import android.content.res.Configuration
+import android.graphics.BitmapFactory
 import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
 import android.os.Bundle
@@ -17,6 +18,7 @@ import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -43,6 +45,7 @@ class LauncherActivity : AppCompatActivity() {
     private lateinit var hiddenInput: EditText
     private lateinit var searchButton: View
     private lateinit var rootLayout: FrameLayout
+    private lateinit var backgroundImage: ImageView
 
     // Widget hosting
     private lateinit var widgetPage: WidgetPageView
@@ -91,6 +94,7 @@ class LauncherActivity : AppCompatActivity() {
         )
 
         rootLayout = findViewById(R.id.root_layout)
+        backgroundImage = findViewById(R.id.background_image)
         recyclerView = findViewById(R.id.app_list)
         layoutManager = createLayoutManager(FoldState.UNKNOWN)
         recyclerView.layoutManager = layoutManager
@@ -116,6 +120,9 @@ class LauncherActivity : AppCompatActivity() {
             widgetRepository.removeWidgetId(widgetId, currentScreenKey)
             widgetRepository.removeWidgetHeight(widgetId)
             widgetRepository.removeWidgetWidth(widgetId)
+        }
+        widgetPage.onWidgetReorder = { _, _ ->
+            widgetRepository.saveWidgetOrder(widgetPage.getWidgetOrder(), currentScreenKey)
         }
         widgetPage.onWidgetResized = { widgetId, widthPx, heightPx ->
             val d = resources.displayMetrics.density
@@ -221,6 +228,7 @@ class LauncherActivity : AppCompatActivity() {
         widgetRepository.startListening()
         applySettings(resetAnimations = !settingsApplied)
         settingsApplied = true
+        loadBackground()
         clearSearch()
         hideAppList(animate = false)
         widgetRepository.migratePerScreen(currentScreenKey)
@@ -498,6 +506,20 @@ class LauncherActivity : AppCompatActivity() {
         (letterPopup.layoutParams as FrameLayout.LayoutParams).marginEnd = popupMargin
 
         adapter.notifyDataSetChanged()
+    }
+
+    private fun loadBackground() {
+        val path = Settings.backgroundImagePath
+        if (path != null && java.io.File(path).exists()) {
+            val bmp = BitmapFactory.decodeFile(path)
+            if (bmp != null) {
+                backgroundImage.setImageBitmap(bmp)
+                backgroundImage.visibility = View.VISIBLE
+                return
+            }
+        }
+        backgroundImage.setImageDrawable(null)
+        backgroundImage.visibility = View.GONE
     }
 
     private fun createLayoutManager(state: FoldState): RecyclerView.LayoutManager {

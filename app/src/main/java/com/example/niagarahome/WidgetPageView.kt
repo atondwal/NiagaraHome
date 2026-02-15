@@ -28,6 +28,7 @@ class WidgetPageView @JvmOverloads constructor(
     var onAddWidgetClick: (() -> Unit)? = null
     var onWidgetRemove: ((Int) -> Unit)? = null
     var onWidgetResized: ((Int, Int, Int) -> Unit)? = null // widgetId, widthPx, heightPx
+    var onWidgetReorder: ((Int, Int) -> Unit)? = null // widgetId, direction (-1=up, +1=down)
 
     private val density = resources.displayMetrics.density
     private var editingWrapper: WidgetFrame? = null
@@ -88,7 +89,8 @@ class WidgetPageView @JvmOverloads constructor(
 
         val frame = WidgetFrame(context, widgetId, hostView, wrapHeight, density, scrollView,
             onRemove = { id -> onWidgetRemove?.invoke(id) },
-            onResized = { id, w, h -> onWidgetResized?.invoke(id, w, h) }
+            onResized = { id, w, h -> onWidgetResized?.invoke(id, w, h) },
+            onMove = { id, dir -> moveWidget(id, dir) }
         )
         val lp = ViewGroup.MarginLayoutParams(wrapWidth, ViewGroup.LayoutParams.WRAP_CONTENT)
         lp.bottomMargin = (8 * density).toInt()
@@ -144,6 +146,25 @@ class WidgetPageView @JvmOverloads constructor(
     fun exitEditMode() {
         editingWrapper?.setEditMode(false)
         editingWrapper = null
+    }
+
+    private fun moveWidget(widgetId: Int, direction: Int) {
+        val index = (0 until widgetContainer.childCount).firstOrNull { i ->
+            val child = widgetContainer.getChildAt(i)
+            child is WidgetFrame && child.widgetId == widgetId
+        } ?: return
+        val targetIndex = index + direction
+        if (targetIndex < 0 || targetIndex >= widgetContainer.childCount) return
+        val frame = widgetContainer.getChildAt(index)
+        widgetContainer.removeViewAt(index)
+        widgetContainer.addView(frame, targetIndex)
+        onWidgetReorder?.invoke(widgetId, direction)
+    }
+
+    fun getWidgetOrder(): List<Int> {
+        return (0 until widgetContainer.childCount).mapNotNull { i ->
+            (widgetContainer.getChildAt(i) as? WidgetFrame)?.widgetId
+        }
     }
 
     fun isEditingWidget() = editingWrapper != null
@@ -279,7 +300,8 @@ class WidgetPageView @JvmOverloads constructor(
         private val dp: Float,
         private val parentScrollView: ScrollView,
         private val onRemove: (Int) -> Unit,
-        private val onResized: (Int, Int, Int) -> Unit
+        private val onResized: (Int, Int, Int) -> Unit,
+        private val onMove: (Int, Int) -> Unit
     ) : FrameLayout(context) {
 
         private val border: View
@@ -287,6 +309,8 @@ class WidgetPageView @JvmOverloads constructor(
         private val leftHandle: View
         private val rightHandle: View
         private val removeButton: TextView
+        private val upButton: TextView
+        private val downButton: TextView
         private val minHeightPx = (60 * dp).toInt()
         private val minWidthPx = (60 * dp).toInt()
         private val editViews = mutableListOf<View>()
@@ -364,7 +388,45 @@ class WidgetPageView @JvmOverloads constructor(
             }
             addView(removeButton)
 
-            editViews.addAll(listOf(border, bottomHandle, leftHandle, rightHandle, removeButton))
+            // Move-up button at top-left
+            upButton = TextView(context).apply {
+                layoutParams = LayoutParams(btnSize, btnSize, Gravity.TOP or Gravity.START).apply {
+                    topMargin = (4 * dp).toInt()
+                    marginStart = (4 * dp).toInt()
+                }
+                text = "\u25B2"
+                setTextColor(Color.WHITE)
+                textSize = 16f
+                gravity = Gravity.CENTER
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(Color.argb(200, 80, 80, 80))
+                }
+                visibility = View.GONE
+                setOnClickListener { onMove(widgetId, -1) }
+            }
+            addView(upButton)
+
+            // Move-down button below up button
+            downButton = TextView(context).apply {
+                layoutParams = LayoutParams(btnSize, btnSize, Gravity.TOP or Gravity.START).apply {
+                    topMargin = (4 * dp + btnSize).toInt()
+                    marginStart = (4 * dp).toInt()
+                }
+                text = "\u25BC"
+                setTextColor(Color.WHITE)
+                textSize = 16f
+                gravity = Gravity.CENTER
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(Color.argb(200, 80, 80, 80))
+                }
+                visibility = View.GONE
+                setOnClickListener { onMove(widgetId, +1) }
+            }
+            addView(downButton)
+
+            editViews.addAll(listOf(border, bottomHandle, leftHandle, rightHandle, removeButton, upButton, downButton))
 
             // Bottom handle drag (vertical resize)
             setupVerticalDrag(bottomHandle)

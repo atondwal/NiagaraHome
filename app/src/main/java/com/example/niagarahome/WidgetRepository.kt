@@ -44,6 +44,10 @@ class WidgetRepository(private val context: Context) {
         appWidgetHost.deleteAppWidgetId(id)
     }
 
+    fun saveWidgetOrder(ids: List<Int>, screen: String) {
+        prefs.edit().putString("${KEY_WIDGET_IDS}_$screen", ids.joinToString(",")).apply()
+    }
+
     fun migratePerScreen(currentScreen: String) {
         if (prefs.getBoolean(KEY_MIGRATED_PER_SCREEN, false)) return
         val legacy = prefs.getString(KEY_WIDGET_IDS, "") ?: ""
