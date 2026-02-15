@@ -120,9 +120,14 @@ class LauncherActivity : AppCompatActivity() {
             widgetRepository.removeWidgetId(widgetId, currentScreenKey)
             widgetRepository.removeWidgetHeight(widgetId)
             widgetRepository.removeWidgetWidth(widgetId)
+            widgetRepository.removeWidgetMargin(widgetId)
         }
         widgetPage.onWidgetReorder = { _, _ ->
             widgetRepository.saveWidgetOrder(widgetPage.getWidgetOrder(), currentScreenKey)
+        }
+        widgetPage.onWidgetMarginChanged = { widgetId, marginPx ->
+            val d = resources.displayMetrics.density
+            widgetRepository.setWidgetMarginDp(widgetId, (marginPx / d).toInt())
         }
         widgetPage.onWidgetResized = { widgetId, widthPx, heightPx ->
             val d = resources.displayMetrics.density
@@ -453,7 +458,8 @@ class LauncherActivity : AppCompatActivity() {
                 val hostView = widgetRepository.createView(id)
                 setupWidgetView(hostView, info)
                 val (w, h) = widgetSizePx(id, info)
-                widgetPage.addWidgetView(hostView, id, w, h)
+                val marginPx = (widgetRepository.getWidgetMarginDp(id) * resources.displayMetrics.density).toInt()
+                widgetPage.addWidgetView(hostView, id, w, h, marginPx)
             } else {
                 widgetRepository.removeWidgetId(id, currentScreenKey)
             }
@@ -558,7 +564,7 @@ class LauncherActivity : AppCompatActivity() {
 
     // Intercept ALL touches for pull-down, swipe-up, and outside-tap detection
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
-        if (!widgetPage.isEditingWidget()) {
+        if (!widgetPage.isEditingWidget() && !widgetPage.isPinching()) {
             if (handlePullDown(event)) return true
             if (handleSwipeUp(event)) return true
             if (handleSearchSwipeDown(event)) return true

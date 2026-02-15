@@ -112,4 +112,16 @@ class WidgetRepository(private val context: Context) {
     fun removeWidgetWidth(widgetId: Int) {
         prefs.edit().remove("widget_width_$widgetId").apply()
     }
+
+    fun getWidgetMarginDp(widgetId: Int): Int {
+        return prefs.getInt("widget_margin_$widgetId", 8)
+    }
+
+    fun setWidgetMarginDp(widgetId: Int, marginDp: Int) {
+        prefs.edit().putInt("widget_margin_$widgetId", marginDp).apply()
+    }
+
+    fun removeWidgetMargin(widgetId: Int) {
+        prefs.edit().remove("widget_margin_$widgetId").apply()
+    }
 }

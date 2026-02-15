@@ -30,9 +30,16 @@ class WidgetPageView @JvmOverloads constructor(
     var onWidgetRemove: ((Int) -> Unit)? = null
     var onWidgetResized: ((Int, Int, Int) -> Unit)? = null // widgetId, widthPx, heightPx
     var onWidgetReorder: ((Int, Int) -> Unit)? = null // widgetId, direction (-1=up, +1=down)
+    var onWidgetMarginChanged: ((Int, Int) -> Unit)? = null // widgetId, marginPx
 
     private val density = resources.displayMetrics.density
     private var editingWrapper: WidgetFrame? = null
+
+    // Pinch-to-resize-gap state
+    private var pinching = false
+    private var pinchGapIndex = -1
+    private var pinchStartSpan = 0f
+    private var pinchStartMargin = 0
 
     init {
         scrollView = ScrollView(context).apply {
@@ -89,7 +96,7 @@ class WidgetPageView @JvmOverloads constructor(
         updateEmptyState()
     }
 
-    fun addWidgetView(hostView: NHWidgetHostView, widgetId: Int, widthPx: Int = 0, heightPx: Int = 0) {
+    fun addWidgetView(hostView: NHWidgetHostView, widgetId: Int, widthPx: Int = 0, heightPx: Int = 0, marginPx: Int = (8 * density).toInt()) {
         val wrapHeight = if (heightPx > 0) heightPx else (200 * density).toInt()
         val wrapWidth = if (widthPx > 0) widthPx else ViewGroup.LayoutParams.MATCH_PARENT
 
@@ -99,7 +106,7 @@ class WidgetPageView @JvmOverloads constructor(
             onMove = { id, dir -> moveWidget(id, dir) }
         )
         val lp = ViewGroup.MarginLayoutParams(wrapWidth, ViewGroup.LayoutParams.WRAP_CONTENT)
-        lp.bottomMargin = (8 * density).toInt()
+        lp.bottomMargin = marginPx
         frame.layoutParams = lp
 
         // Long-press on the host view enters edit mode
@@ -180,10 +187,10 @@ class WidgetPageView @JvmOverloads constructor(
     fun canScrollDown() = scrollView.canScrollVertically(1)
 
     fun isEditingWidget() = editingWrapper != null
+    fun isPinching() = pinching
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-        if (ev.action == MotionEvent.ACTION_DOWN && editingWrapper != null) {
-            // Check if the tap is inside the editing widget frame
+        if (ev.actionMasked == MotionEvent.ACTION_DOWN && editingWrapper != null) {
             val frame = editingWrapper!!
             val loc = IntArray(2)
             frame.getLocationOnScreen(loc)
@@ -195,7 +202,75 @@ class WidgetPageView @JvmOverloads constructor(
                 exitEditMode()
             }
         }
+        if (handlePinchGesture(ev)) return true
         return super.dispatchTouchEvent(ev)
+    }
+
+    private fun handlePinchGesture(ev: MotionEvent): Boolean {
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                if (ev.pointerCount == 2) {
+                    val y0 = ev.getY(0)
+                    val y1 = ev.getY(1)
+                    val gapIndex = findGapWidgetIndex(ev)
+                    if (gapIndex >= 0) {
+                        pinching = true
+                        pinchGapIndex = gapIndex
+                        pinchStartSpan = Math.abs(y0 - y1)
+                        val frame = widgetContainer.getChildAt(gapIndex) as? WidgetFrame
+                        pinchStartMargin = (frame?.layoutParams as? ViewGroup.MarginLayoutParams)?.bottomMargin ?: 0
+                        scrollView.requestDisallowInterceptTouchEvent(true)
+                        return true
+                    }
+                }
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (pinching && ev.pointerCount >= 2) {
+                    val span = Math.abs(ev.getY(0) - ev.getY(1))
+                    val delta = (span - pinchStartSpan).toInt()
+                    val newMargin = pinchStartMargin + delta
+                    val frame = widgetContainer.getChildAt(pinchGapIndex) as? WidgetFrame
+                    val lp = frame?.layoutParams as? ViewGroup.MarginLayoutParams
+                    if (lp != null) {
+                        lp.bottomMargin = newMargin
+                        frame.layoutParams = lp
+                    }
+                    return true
+                }
+            }
+            MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                if (pinching) {
+                    pinching = false
+                    scrollView.requestDisallowInterceptTouchEvent(false)
+                    val frame = widgetContainer.getChildAt(pinchGapIndex) as? WidgetFrame
+                    if (frame != null) {
+                        val margin = (frame.layoutParams as? ViewGroup.MarginLayoutParams)?.bottomMargin ?: 0
+                        onWidgetMarginChanged?.invoke(frame.widgetId, margin)
+                    }
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    /** Find the widget whose bottom edge falls between the two fingers. */
+    private fun findGapWidgetIndex(ev: MotionEvent): Int {
+        // rawY is only available for pointer 0; offset pointer 1 from it
+        val rawY0 = ev.rawY
+        val rawY1 = ev.rawY - ev.getY(0) + ev.getY(1)
+        val topY = minOf(rawY0, rawY1)
+        val bottomY = maxOf(rawY0, rawY1)
+        val loc = IntArray(2)
+        for (i in 0 until widgetContainer.childCount) {
+            val child = widgetContainer.getChildAt(i) as? WidgetFrame ?: continue
+            child.getLocationOnScreen(loc)
+            val childBottom = loc[1] + child.height
+            if (childBottom in topY.toInt()..bottomY.toInt()) {
+                return i
+            }
+        }
+        return -1
     }
 
     private fun updateEmptyState() {
