@@ -24,6 +24,7 @@ class WidgetPageView @JvmOverloads constructor(
     private val scrollView: ScrollView
     private val emptyText: TextView
     val addButton: TextView
+    private lateinit var addButtonWrapper: FrameLayout
 
     var onAddWidgetClick: (() -> Unit)? = null
     var onWidgetRemove: ((Int) -> Unit)? = null
@@ -38,7 +39,7 @@ class WidgetPageView @JvmOverloads constructor(
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
             isVerticalScrollBarEnabled = false
             clipToPadding = false
-            val bottomPad = (100 * density).toInt()
+            val bottomPad = (16 * density).toInt()
             val hPad = (16 * density).toInt()
             setPadding(hPad, 0, hPad, bottomPad)
         }
@@ -49,6 +50,25 @@ class WidgetPageView @JvmOverloads constructor(
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
         }
+
+        val btnSize = (56 * density).toInt()
+        addButton = TextView(context).apply {
+            layoutParams = FrameLayout.LayoutParams(btnSize, btnSize, Gravity.CENTER_HORIZONTAL)
+            text = "+"
+            setTextColor(Color.WHITE)
+            textSize = 28f
+            gravity = Gravity.CENTER
+            setBackgroundResource(R.drawable.widget_add_button_bg)
+            setOnClickListener { onAddWidgetClick?.invoke() }
+        }
+        addButtonWrapper = FrameLayout(context).apply {
+            val lp = ViewGroup.MarginLayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            lp.topMargin = (16 * density).toInt()
+            lp.bottomMargin = (32 * density).toInt()
+            layoutParams = lp
+            addView(addButton)
+        }
+        widgetContainer.addView(addButtonWrapper)
 
         scrollView.addView(widgetContainer)
         addView(scrollView)
@@ -65,20 +85,6 @@ class WidgetPageView @JvmOverloads constructor(
             typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
         }
         addView(emptyText)
-
-        val btnSize = (56 * density).toInt()
-        addButton = TextView(context).apply {
-            layoutParams = LayoutParams(btnSize, btnSize, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
-                bottomMargin = (32 * density).toInt()
-            }
-            text = "+"
-            setTextColor(Color.WHITE)
-            textSize = 28f
-            gravity = Gravity.CENTER
-            setBackgroundResource(R.drawable.widget_add_button_bg)
-            setOnClickListener { onAddWidgetClick?.invoke() }
-        }
-        addView(addButton)
 
         updateEmptyState()
     }
@@ -105,7 +111,9 @@ class WidgetPageView @JvmOverloads constructor(
         }
         android.util.Log.d("NHWidget", "Set long click listener on hostView for widget $widgetId, longClickable=${hostView.isLongClickable}")
 
-        widgetContainer.addView(frame)
+        // Insert before the add button (last child)
+        val insertIndex = (widgetContainer.childCount - 1).coerceAtLeast(0)
+        widgetContainer.addView(frame, insertIndex)
         updateEmptyState()
     }
 
@@ -134,6 +142,7 @@ class WidgetPageView @JvmOverloads constructor(
     fun clearWidgets() {
         editingWrapper = null
         widgetContainer.removeAllViews()
+        widgetContainer.addView(addButtonWrapper)
         updateEmptyState()
     }
 
@@ -187,7 +196,8 @@ class WidgetPageView @JvmOverloads constructor(
     }
 
     private fun updateEmptyState() {
-        emptyText.visibility = if (widgetContainer.childCount == 0) View.VISIBLE else View.GONE
+        // childCount == 1 means only the add button is present
+        emptyText.visibility = if (widgetContainer.childCount <= 1) View.VISIBLE else View.GONE
     }
 
     /**
